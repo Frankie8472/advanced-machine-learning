@@ -1,5 +1,6 @@
 import numpy as np
 from pandas import DataFrame, read_csv, read_hdf
+from sklearn.metrics import mean_squared_error
 
 
 def read_hdf_to_matrix(filename):
@@ -7,8 +8,8 @@ def read_hdf_to_matrix(filename):
     return data.as_matrix(), data.index
 
 
-def read_csv_to_matrix(filename, index_name):
-    data = read_csv("input/" + filename, index_col=index_name)
+def read_csv_to_matrix(filename):
+    data = read_csv("input/" + filename, index_col="Id")
     return data.as_matrix(), data.index
 
 
@@ -20,3 +21,7 @@ def split_into_x_y(data_set):
     y = data_set[:, 0]
     x = data_set[:, 1:]
     return x, y
+
+
+def root_mean_squared_error(y, y_pred):
+    return mean_squared_error(y, y_pred)**0.5
