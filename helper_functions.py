@@ -19,8 +19,8 @@ def write_to_csv_from_vector(filename, index_col, vec):
 
 def split_into_x_y(data_set):
     y = data_set[:, 0]
-    x = data_set[:, 1:]
-    return x, y
+    X = data_set[:, 1:]
+    return X, y
 
 
 def root_mean_squared_error(y, y_pred):

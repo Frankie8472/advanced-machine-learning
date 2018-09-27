@@ -7,13 +7,13 @@
                     Nicola Rüegsegger (runicola)
                     Christian Knieling (knielinc)
 """
-from sklearn.pipeline import Pipeline
 
 import helper_functions as hf
+from sklearn.pipeline import Pipeline
 from sklearn.model_selection import KFold, cross_val_score
-from sklearn.metrics import make_scorer
+from sklearn.metrics import make_scorer, mean_squared_error
 from sklearn.preprocessing import StandardScaler
-from tensorflow.python.keras.wrappers.scikit_learn import KerasRegressor
+from keras.wrappers.scikit_learn import KerasRegressor
 from keras import Sequential
 from keras.layers import Dense, Dropout
 
@@ -23,19 +23,19 @@ features = 10
 def baseline_model():
     # Create model
     model = Sequential()
-    model.add(Dense(features, input_dim=features, kernel_initializer='normal', activation='relu'))
+    model.add(Dense(20, input_dim=features, kernel_initializer='normal', activation='relu'))
     model.add(Dropout(0.5))
-    """model.add(Dense(100, kernel_initializer='normal', activation='relu'))
-    model.add(Dropout(0.5))"""
-    model.add(Dense(1, kernel_initializer='normal', activation='softmax'))
+    model.add(Dense(10, kernel_initializer='normal', activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(1, kernel_initializer='normal', activation='sigmoid'))
 
     # Compile model
-    model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
     return model
 
 
 def get_estimator():
-    estimator = KerasRegressor(build_fn=baseline_model, epochs=50, batch_size=5, verbose=1)
+    estimator = KerasRegressor(build_fn=baseline_model, epochs=100, batch_size=100, verbose=0)
     return estimator
 
 
@@ -54,11 +54,11 @@ def evaluate(data_labeled):
     kfold = KFold(n_splits=10, shuffle=False, random_state=42)
     acc = make_scorer(hf.root_mean_squared_error, greater_is_better=False)
 
-    results = cross_val_score(pipeline, X, y, cv=kfold, n_jobs=3)   # scoring=acc,
+    results = cross_val_score(pipeline, X, y, cv=kfold, n_jobs=-1, scoring=acc)
     print("Results: %.2f (%.2f) MSE" % (results.mean(), results.std()))
 
 
-def predict(data_labeled, X_test):
+def predict(data_labeled, X_test, test_index):
     X, y = hf.split_into_x_y(data_labeled)
 
     ss = StandardScaler()
@@ -75,10 +75,13 @@ def predict(data_labeled, X_test):
     hf.write_to_csv_from_vector("sample_franz.csv", test_index, y_pred)
 
 
-if __name__ == "__main__":
+def go():
     # Get, split and transform train dataset
     data_train, train_index = hf.read_csv_to_matrix("train.csv")
     data_test, test_index = hf.read_csv_to_matrix("test.csv")
 
     # Parameter search/evaluation
-    evaluate(data_train)
+    # evaluate(data_train)
+
+    # Predict y for X_test
+    predict(data_train, data_test, test_index)
