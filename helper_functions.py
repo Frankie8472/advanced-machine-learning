@@ -5,12 +5,12 @@ from sklearn.metrics import mean_squared_error
 
 def read_hdf_to_matrix(filename):
     data = read_hdf("input/" + filename)
-    return data.as_matrix(), data.index
+    return data.values, data.index
 
 
 def read_csv_to_matrix(filename):
     data = read_csv("input/" + filename, index_col="Id")
-    return data.as_matrix(), data.index
+    return data.values, data.index
 
 
 def write_to_csv_from_vector(filename, index_col, vec):
