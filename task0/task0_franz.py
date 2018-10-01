@@ -8,7 +8,6 @@
                     Christian Knieling (knielinc)
 """
 from sklearn.decomposition import PCA
-
 import helper_functions as hf
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import KFold, cross_val_score
@@ -17,30 +16,36 @@ from sklearn.preprocessing import StandardScaler
 from keras.wrappers.scikit_learn import KerasRegressor
 from keras import Sequential
 from keras.layers import Dense, Dropout
+import numpy as np
+import keras.backend as kb
 
-features = 1
+features = 7
+
+
+def root_mean_squared_error(y_true, y_pred):
+    return kb.sqrt(kb.mean(kb.square(y_pred - y_true), axis=-1))
 
 
 def baseline_model():
     # Create model
     model = Sequential()
-    model.add(Dense(20, input_dim=features, kernel_initializer='normal', activation='tanh'))
-    #model.add(Dropout(0.5))
-    model.add(Dense(20, kernel_initializer='normal', activation='tanh'))
-    #model.add(Dropout(0.5))
-    model.add(Dense(20, kernel_initializer='normal', activation='tanh'))
-    #model.add(Dropout(0.5))
-    model.add(Dense(10, kernel_initializer='normal', activation='tanh'))
-    #model.add(Dropout(0.5))
+    model.add(Dense(20, input_dim=features, kernel_initializer='normal', activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(30, kernel_initializer='normal', activation='relu'))
+    model.add(Dropout(0.6))
+    model.add(Dense(20, kernel_initializer='normal', activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(5, kernel_initializer='normal', activation='relu'))
+    model.add(Dropout(0.3))
     model.add(Dense(1, kernel_initializer='normal', activation='tanh'))
 
     # Compile model
-    model.compile(optimizer='adam', loss='mean_squared_error', metrics=['accuracy'])
+    model.compile(optimizer='adam', loss=root_mean_squared_error, metrics=['accuracy'])
     return model
 
 
 def get_estimator():
-    estimator = KerasRegressor(build_fn=baseline_model, epochs=100, batch_size=10, verbose=0)
+    estimator = KerasRegressor(build_fn=baseline_model, epochs=200, batch_size=10, verbose=0)
     return estimator
 
 
@@ -50,6 +55,7 @@ def evaluate(data_labeled):
     estimator = get_estimator()
 
     estimators = [
+        ('pca', PCA(n_components=features)),
         ('standardize', StandardScaler()),
         ('mlp', estimator)
     ]
@@ -66,6 +72,9 @@ def evaluate(data_labeled):
 def predict(data_labeled, X_test, test_index):
     X, y = hf.split_into_x_y(data_labeled)
 
+    y = np.clip(y, a_min=-1000, a_max=1000)
+    y /= 1000
+
     pca = PCA(n_components=features)
     ss = StandardScaler()
     estimator = get_estimator()
@@ -79,6 +88,7 @@ def predict(data_labeled, X_test, test_index):
 
     y_pred = estimator.predict(transformed_test)
 
+    y_pred *= 1000
     # Print solution to file
     hf.write_to_csv_from_vector("sample_franz.csv", test_index, y_pred)
 
@@ -89,7 +99,10 @@ def go():
     data_test, test_index = hf.read_csv_to_matrix("test.csv")
 
     # Parameter search/evaluation
-    # evaluate(data_train)
+    #evaluate(data_train)
 
     # Predict y for X_test
     predict(data_train, data_test, test_index)
+
+
+go()

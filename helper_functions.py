@@ -24,4 +24,4 @@ def split_into_x_y(data_set):
 
 
 def root_mean_squared_error(y, y_pred):
-    return mean_squared_error(y, y_pred)**0.5
+    return mean_squared_error(y, y_pred)**5
