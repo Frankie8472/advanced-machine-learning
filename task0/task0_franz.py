@@ -90,13 +90,13 @@ def predict(data_labeled, X_test, test_index):
 
     y_pred *= 1000
     # Print solution to file
-    hf.write_to_csv_from_vector("sample_franz.csv", test_index, y_pred)
+    hf.write_to_csv_from_vector("sample_franz.csv", test_index, y_pred, "Id")
 
 
 def go():
     # Get, split and transform train dataset
-    data_train, train_index = hf.read_csv_to_matrix("train.csv")
-    data_test, test_index = hf.read_csv_to_matrix("test.csv")
+    data_train, train_index = hf.read_csv_to_matrix("train.csv", "Id")
+    data_test, test_index = hf.read_csv_to_matrix("test.csv", "Id")
 
     # Parameter search/evaluation
     #evaluate(data_train)
