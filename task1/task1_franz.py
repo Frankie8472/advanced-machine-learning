@@ -1,17 +1,20 @@
+from sklearn.model_selection import KFold
+from sklearn.model_selection import cross_val_score
+from sklearn.svm import SVR
+
 import helper_functions as hf
 import numpy as np
 from sklearn.metrics import r2_score, make_scorer
-from sklearn.decomposition import PCA
 from sklearn.preprocessing import QuantileTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.feature_selection import VarianceThreshold, SelectKBest, f_regression
-from sklearn.linear_model import RidgeCV, ElasticNetCV, LarsCV, LassoLarsCV, LogisticRegressionCV, LassoCV
+from sklearn.linear_model import RidgeCV, ElasticNetCV
 
 
 # Feature analysis
 # Add missing data
 def add_missing_data(incomplete_data_train, incomplete_data_test):
-    imp = SimpleImputer(missing_values=np.nan, strategy="mean")  # "mean", "median", "most_frequent"
+    imp = SimpleImputer(missing_values=np.nan, strategy="median")  # "mean", "median", "most_frequent"
     data_train = imp.fit_transform(incomplete_data_train)
     data_test = imp.transform(incomplete_data_test)
     return data_train, data_test
@@ -26,7 +29,6 @@ def remove_features_with_low_variance(data_train, data_test):
     return data_train, data_test
 
 
-# PCA with 0.97
 def remove_unimportant_features(data_train, data_test, y):
 
     skb = SelectKBest(f_regression, k=222)
@@ -53,15 +55,17 @@ def read_data():
 
 
 def predict(X_train, y_train, X_test):
-    cods = make_scorer(r2_score)
+    score = make_scorer(r2_score, greater_is_better=True)
     alphas = np.geomspace(1e-10, 1e5, 16)
+
+    kfold = KFold(n_splits=10, shuffle=True, random_state=42)
 
     reg0 = RidgeCV(
         alphas=alphas,
         fit_intercept=True,
         normalize=False,
         cv=10,
-        scoring=cods
+        scoring=score
     )
 
     reg1 = ElasticNetCV(
@@ -78,10 +82,25 @@ def predict(X_train, y_train, X_test):
         positive=False
     )
 
-    reg = reg1
+    reg2 = SVR(
+        kernel='poly',
+        degree=3,
+        gamma='scale',
+        coef0=1,
+        tol=1e-6,
+        C=1.0,
+        epsilon=0.1,
+        shrinking=False,
+        cache_size=2000,
+        verbose=False,
+        max_iter=-1
+    )
 
+    reg = reg2
+
+    results = cross_val_score(reg, X_train, y_train, cv=kfold, n_jobs=-1, scoring=score)
+    print("Results: %.2f (%.2f) MSE" % (results.mean(), results.std()))
     reg.fit(X_train, y_train)
-    print(reg.score(X_train, y_train))
     return reg.predict(X_test)
 
 
