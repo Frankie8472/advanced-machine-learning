@@ -1,6 +1,8 @@
 import numpy as np
+import collections as col
 from pandas import DataFrame, read_csv, read_hdf
 from sklearn.metrics import mean_squared_error
+
 
 
 def read_hdf_to_matrix(filename):
@@ -25,3 +27,11 @@ def split_into_x_y(data_set):
 
 def root_mean_squared_error(y, y_pred):
     return mean_squared_error(y, y_pred)**5
+
+
+def count_class_occurences(y):
+    ctr = col.Counter(y)
+    print("=======================================================================")
+    print(ctr)
+    print("=======================================================================")
+    return
