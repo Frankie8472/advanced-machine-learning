@@ -6,12 +6,12 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.model_selection import cross_val_score
 from sklearn.metrics import balanced_accuracy_score, make_scorer
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.feature_selection import VarianceThreshold
+from sklearn.feature_selection import VarianceThreshold, SelectKBest, f_classif
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC, LinearSVC
-from imblearn.over_sampling import RandomOverSampler
-from imblearn.under_sampling import RandomUnderSampler
-# from imblearn.combine import SMOTEENN, SMOTETomek
+from imblearn.over_sampling import RandomOverSampler, ADASYN
+from imblearn.under_sampling import RandomUnderSampler, CondensedNearestNeighbour, AllKNN
+from imblearn.combine import SMOTEENN, SMOTETomek
 
 """ 
 IMPORTANT: They stupid, did use csv for large amount of data instead of hf5...
@@ -24,7 +24,7 @@ IMPORTANT: They stupid, did use csv for large amount of data instead of hf5...
     - 3. Do 1. and 2. to 1000-3000
 
 - test set has same imbalance:  
-    1.0: 3600, 0.0: 600, 2.0: 600
+    1.0: 3075, 0.0: 512.5, 2.0: 512.5
     Class probability: 0.0: 0.125, 1.0: 0.75, 2.0: 0.125
 """
 
@@ -51,15 +51,24 @@ def remove_features_with_low_variance(data_train, data_test):
     return data_train, data_test
 
 
-def oversample(data_train, y):
+def remove_unimportant_features(data_train, data_test, y):
+
+    skb = SelectKBest(f_classif, k=500)
+    skb.fit(data_train, y)
+    data_train = skb.transform(data_train)
+    data_test = skb.transform(data_test)
+
+    return data_train, data_test
+
+
+def resample(data_train, y):
     ros = RandomOverSampler()
-    data_train_resampled, y_resampled = ros.fit_resample(data_train, y)
-    return data_train_resampled, y_resampled
-
-
-def undersample(data_train, y):
     rus = RandomUnderSampler()
-    data_train_resampled, y_resampled = rus.fit_resample(data_train, y)
+    sme = SMOTEENN()
+    smt = SMOTETomek()
+    cnn = CondensedNearestNeighbour()
+    res = rus
+    data_train_resampled, y_resampled = res.fit_resample(data_train, y)
     return data_train_resampled, y_resampled
 
 
@@ -73,17 +82,17 @@ def read_data():
 def predict(X_train, y_train, X_test, class_weights):
     score = make_scorer(balanced_accuracy_score, greater_is_better=True)
 
-    skfold = StratifiedKFold(n_splits=10, shuffle=False, random_state=42)
+    skfold = StratifiedKFold(n_splits=5, shuffle=False, random_state=42)
 
-    reg0 = SVC(
-        C=1.0,
+    svc = SVC(
+        C=10.0,
         kernel='rbf',
         degree=3,
-        gamma='auto_deprecated',
+        gamma='scale',
         coef0=0.0,
         shrinking=True,
         probability=False,
-        tol=1e-3,
+        tol=1e-4,
         cache_size=200,
         class_weight=class_weights,
         verbose=False,
@@ -92,38 +101,10 @@ def predict(X_train, y_train, X_test, class_weights):
         random_state=None
     )
 
-    reg1 = LinearSVC(
-        penalty='l2',
-        loss='squared_hinge',
-        dual=True,
-        tol=1e-4,
-        C=1.0,
-        multi_class='ovr',
-        fit_intercept=True,
-        intercept_scaling=1,
-        class_weight=class_weights,
-        verbose=0,
-        random_state=None,
-        max_iter=1000
-    )
-
-    reg2 = KNeighborsClassifier(
-        n_neighbors=5,
-        weights='uniform',
-        algorithm='auto',
-        leaf_size=30,
-        p=2,
-        metric='minkowski',
-        metric_params=None,
-        n_jobs=None
-    )
-
-    reg = reg1
-
-    results = cross_val_score(reg, X_train, y_train, cv=skfold, n_jobs=-1, scoring=score)
+    results = cross_val_score(svc, X_train, y_train, cv=skfold, n_jobs=7, scoring=score)
     print("Results: %.2f (%.2f) MSE" % (results.mean(), results.std()))
-    reg.fit(X_train, y_train)
-    return reg.predict(X_test)
+    svc.fit(X_train, y_train)
+    return svc.predict(X_test)
 
 
 # Main function
@@ -131,21 +112,26 @@ def main():
     X_train, X_test, y_train, test_index = read_data()
     y_train = np.squeeze(y_train)
 
+    print("# Train samples: "+str(X_train.shape))
+    print("# Test_samples: "+str(X_test.shape))
+
+    X_train, X_test = scale_features(X_train, X_test)
+    hf.count_class_occurences(y_train)
+
     class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(y_train), y=y_train)
     class_weights = dict(enumerate(class_weights))
 
-    X_train, X_test = scale_features(X_train, X_test)
-
+    X_train, X_test = remove_unimportant_features(X_train, X_test, y_train)
     print(X_train.shape)
-    # X_train, X_test = remove_features_with_low_variance(X_train, X_test)
-    # print(X_train.shape)
-    X_train, y_train = undersample(X_train, y_train)
-    print(X_train.shape)
-
+    X_train, y_train = resample(X_train, y_train)
+    print("Oversampled: "+str(X_train.shape))
     hf.count_class_occurences(y_train)
+
     y_pred = predict(X_train, y_train, X_test, class_weights)
     hf.count_class_occurences(y_pred)
-    #hf.write_to_csv_from_vector("output_franz.csv", test_index, y_pred, "id")
+    print("Counter({1.0: 3075, 0.0: 512.5, 2.0: 512.5})  Should be!")
+
+    hf.write_to_csv_from_vector("output_franz.csv", test_index, y_pred, "id")
 
 
 main()
