@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.svm import SVC
-from sklearn.feature_selection import f_regression, SelectPercentile
+from sklearn.feature_selection import f_regression, SelectKBest
 from sklearn.preprocessing import QuantileTransformer
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import balanced_accuracy_score
@@ -17,7 +17,7 @@ X_train = pd.DataFrame(scaler.fit_transform(X_train))
 X_test = pd.DataFrame(scaler.transform(X_test))
 
 # Do a feature selection
-selector = SelectPercentile(f_regression, percentile=70)
+selector = SelectKBest(f_regression, k=750)
 X_train = pd.DataFrame(selector.fit_transform(X_train, Y_train))
 X_test = pd.DataFrame(selector.transform(X_test))
 
@@ -35,4 +35,4 @@ clf.fit(X_train, Y_train)
 # Get results and print to file
 Y_results = clf.predict(X_test)
 result = pd.DataFrame(data=Y_results, index=X_test.index.values)
-result.to_csv("./output/output_nicu_0.csv", index=True, index_label="id", header=['y'])
+result.to_csv("./output/output_nicu_1.csv", index=True, index_label="id", header=['y'])
