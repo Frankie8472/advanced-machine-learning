@@ -8,7 +8,7 @@ from sklearn.model_selection import StratifiedKFold, GridSearchCV
 from sklearn.model_selection import cross_val_score
 from sklearn.metrics import f1_score, make_scorer
 from sklearn.preprocessing import QuantileTransformer
-from sklearn.feature_selection import SelectPercentile
+from sklearn.feature_selection import SelectPercentile, SelectKBest
 from sklearn.svm import SVC
 
 """ 
@@ -44,6 +44,7 @@ def add_missing_data(incomplete_data_train, incomplete_data_test):
 
 def remove_unimportant_features(data_train, data_test, y):
     ft = SelectPercentile(percentile=50)
+    ft = SelectKBest(k=50)
     ft.fit(data_train, y)
     data_train = ft.transform(data_train)
     data_test = ft.transform(data_test)
@@ -109,17 +110,23 @@ def evaluate(X_train, y_train, iid):
     print("======================================================================================")
 
 
+def f1_score_multi(y_true, y_pred):
+    return f1_score(y_true, y_pred, average='micro')
+
+
 def predict(X_train, y_train, X_test):
     X_train, X_test = add_missing_data(X_train, X_test)
     X_train, X_test = scale_features(X_train, X_test)
     X_train, X_test = remove_unimportant_features(X_train, X_test, y_train)
-    score = make_scorer(f1_score, greater_is_better=True)
 
+    score = make_scorer(f1_score_multi, greater_is_better=True)
+    print("==== Eval ====")
     skfold = StratifiedKFold(n_splits=5, shuffle=False, random_state=42)
 
     svc = SVC(
-        C=1.0,
-        kernel='rbf',
+        C=100.0,
+        kernel='poly',
+        degree=5,
         gamma='scale',
         shrinking=True,
         probability=True,
@@ -130,7 +137,7 @@ def predict(X_train, y_train, X_test):
 
     )
 
-    results = cross_val_score(svc, X_train, y_train, cv=skfold, n_jobs=-1, scoring=score)
+    results = cross_val_score(svc, X_train, y_train, cv=skfold, n_jobs=1, scoring=score)
     print("Results: %.4f (%.4f) MSE" % (results.mean(), results.std()))
     svc.fit(X_train, y_train)
     return svc.predict(X_test)

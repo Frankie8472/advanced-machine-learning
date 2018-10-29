@@ -3,7 +3,7 @@
 """
 
 # import your file
-import task0.task0_franz as tf
+import task3.task3_franz as tf
 
 # AMD GPU support (not sure if working)
 # import plaidml.keras
@@ -11,4 +11,4 @@ import task0.task0_franz as tf
 
 # run in main cause windows is dumb...
 if __name__ == '__main__':
-    tf.go()
+    tf.main()
