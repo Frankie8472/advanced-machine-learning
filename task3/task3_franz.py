@@ -124,9 +124,8 @@ def predict(X_train, y_train, X_test):
     skfold = StratifiedKFold(n_splits=5, shuffle=False, random_state=42)
 
     svc = SVC(
-        C=100.0,
-        kernel='poly',
-        degree=5,
+        C=1.0,
+        kernel='rbf',
         gamma='scale',
         shrinking=True,
         probability=True,
