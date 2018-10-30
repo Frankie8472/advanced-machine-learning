@@ -10,11 +10,15 @@ from sklearn.metrics import f1_score, make_scorer
 from sklearn.preprocessing import QuantileTransformer
 from sklearn.feature_selection import SelectPercentile, SelectKBest
 from sklearn.svm import SVC
+import biosppy
+from neurokit.signal import discrete_to_continuous
+from neurokit.bio import ecg_process, ecg_preprocess, ecg_hrv
 
 """ 
 - Different length of samples
 - 4 classes: 0.0, 1.0, 2.0, 3.0
 - Occurences: 0: 3030, 2: 1474, 1: 443, 3: 170 --> resampling
+- ECG's (x,y): (1e-3 s, 1e-6 V) 
 """
 
 
@@ -146,24 +150,47 @@ def predict(X_train, y_train, X_test):
 def main():
     X_train, X_test, y_train, test_index = read_data()
     y_train = np.squeeze(y_train)
+    print("shit")
+    tmp = X_train[3106, ~np.isnan(X_train[3106, :])]
+    print("yolo")
+    for i in range(0, 2):
+        tmp = np.concatenate((tmp, tmp))
+    # temp = np.concatenate((X_train[3107,enate((X_train[3107, :], np.concatenate((X_train[3107, :], X_train[3107, :]))))))
+    # print(biosppy.signals.ecg.ecg(X_train[3107]))
+    # print(ecg_hrv())
+    # rpeaks, = biosppy.ecg.hamilton_segmenter(signal=filtered, sampling_rate=sampling_rate)
+    # print(rpeaks)
+#    heart_rate = discrete_to_continuous(heart_rate, heart_rate_times,
+#                                        sampling_rate)  # Interpolation using 3rd order spline
+#    ecg_df["Heart_Rate"] = heart_rate
+    tmp2 = ecg_process(
+        tmp,
+        sampling_rate=1000,
+        filter_type='FIR',
+        filter_band='bandpass',
+        filter_frequency=[0.05, 150],
+        # filter_order=0.3,
+        segmenter='hamilton',
+        quality_model='default'
+    )
+
 
     # evaluate(X_train, y_train, True)
 
-    y_pred = predict(X_train, y_train, X_test)
+    # y_pred = predict(X_train, y_train, X_test)
 
     # hf.write_to_csv_from_vector("output_franz.csv", test_index, y_pred, "id")
 
 
 def analysis():
     X_train, X_test, y_train, test_index = read_data()
+
     for i in range(0, 10):
-        tmp = X_train[i, :]
+        j = np.random.randint(0, np.size(X_train, axis=0) - 1)
+        tmp = X_train[j, :]
 
         plt.plot(tmp)
         plt.show()
-
-        # plt.plot(tmp)
-        # plt.show()
 
 
 main()
