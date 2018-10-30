@@ -5,7 +5,7 @@ from sklearn.metrics import mean_squared_error
 
 
 
-def read_hdf_to_matrix(filename):
+def read_hdf_to_matrix(filename, index_name):
     data = read_hdf("input/" + filename)
     return data.values, data.index
 

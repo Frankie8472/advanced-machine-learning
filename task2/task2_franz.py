@@ -6,7 +6,7 @@ from sklearn.model_selection import StratifiedKFold, GridSearchCV
 from sklearn.model_selection import cross_val_score
 from sklearn.metrics import balanced_accuracy_score, make_scorer
 from sklearn.preprocessing import QuantileTransformer
-from sklearn.feature_selection import f_classif, SelectPercentile, SelectKBest
+from sklearn.feature_selection import f_classif, SelectPercentile
 from sklearn.svm import SVC
 
 """ 
@@ -43,8 +43,7 @@ def scale_features(data_train, data_test):
 
 
 def remove_unimportant_features(data_train, data_test, y):
-    ft = SelectPercentile(percentile=70)
-    #ft = SelectKBest(k=750)
+    ft = SelectPercentile(f_classif, percentile=70)
     ft.fit(data_train, y)
     data_train = ft.transform(data_train)
     data_test = ft.transform(data_test)
@@ -52,17 +51,16 @@ def remove_unimportant_features(data_train, data_test, y):
 
 
 def read_data():
-    X_test, test_index = hf.read_csv_to_matrix("X_test.csv", "id")
-    X_train, train_index = hf.read_csv_to_matrix("X_train.csv", "id")
-    y_train, train_index = hf.read_csv_to_matrix("y_train.csv", "id")
+    X_test, test_index = hf.read_hdf_to_matrix("X_test.h5", "id")
+    X_train, train_index = hf.read_hdf_to_matrix("X_train.h5", "id")
+    y_train, train_index = hf.read_hdf_to_matrix("y_train.h5", "id")
     return X_train, X_test, y_train, test_index
 
 
 def evaluate(X_train, y_train, iid):
     estimator = [
         ('qt', QuantileTransformer()),
-        #('sp', SelectPercentile()),
-        ('sk', SelectKBest()),
+        ('sp', SelectPercentile()),
         ('svc', SVC())
     ]
 
@@ -127,7 +125,6 @@ def predict(X_train, y_train, X_test):
         verbose=False,
         max_iter=-1,
         decision_function_shape='ovr',
-
     )
 
     results = cross_val_score(svc, X_train, y_train, cv=skfold, n_jobs=-1, scoring=score)
