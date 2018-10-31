@@ -14,6 +14,7 @@ import biosppy
 from neurokit.signal import discrete_to_continuous
 from neurokit.bio import ecg_process, ecg_preprocess, ecg_hrv
 
+
 """ 
 - Different length of samples
 - 4 classes: 0.0, 1.0, 2.0, 3.0
@@ -153,7 +154,7 @@ def main():
     print("shit")
     tmp = X_train[3106, ~np.isnan(X_train[3106, :])]
     print("yolo")
-    for i in range(0, 2):
+    for i in range(0, 6):
         tmp = np.concatenate((tmp, tmp))
     # temp = np.concatenate((X_train[3107,enate((X_train[3107, :], np.concatenate((X_train[3107, :], X_train[3107, :]))))))
     # print(biosppy.signals.ecg.ecg(X_train[3107]))
@@ -163,6 +164,7 @@ def main():
 #    heart_rate = discrete_to_continuous(heart_rate, heart_rate_times,
 #                                        sampling_rate)  # Interpolation using 3rd order spline
 #    ecg_df["Heart_Rate"] = heart_rate
+
     tmp2 = ecg_process(
         tmp,
         sampling_rate=1000,
