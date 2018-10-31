@@ -1,6 +1,5 @@
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-
 import helper_functions as hf
 import matplotlib.pyplot as plt
 import numpy as np
@@ -10,10 +9,11 @@ from sklearn.metrics import f1_score, make_scorer
 from sklearn.preprocessing import QuantileTransformer
 from sklearn.feature_selection import SelectPercentile, SelectKBest
 from sklearn.svm import SVC
-import biosppy
-from neurokit.signal import discrete_to_continuous
-from neurokit.bio import ecg_process, ecg_preprocess, ecg_hrv
-
+from neurokit import bio_process
+from biosppy import ecg, storage
+import biosppy as bs
+import pylab as pl
+from imblearn.under_sampling import RandomUnderSampler
 
 """ 
 - Different length of samples
@@ -151,31 +151,27 @@ def predict(X_train, y_train, X_test):
 def main():
     X_train, X_test, y_train, test_index = read_data()
     y_train = np.squeeze(y_train)
-    print("shit")
     tmp = X_train[3106, ~np.isnan(X_train[3106, :])]
-    print("yolo")
-    for i in range(0, 6):
-        tmp = np.concatenate((tmp, tmp))
+    tmp = X_train[3107, :]
     # temp = np.concatenate((X_train[3107,enate((X_train[3107, :], np.concatenate((X_train[3107, :], X_train[3107, :]))))))
     # print(biosppy.signals.ecg.ecg(X_train[3107]))
     # print(ecg_hrv())
     # rpeaks, = biosppy.ecg.hamilton_segmenter(signal=filtered, sampling_rate=sampling_rate)
     # print(rpeaks)
-#    heart_rate = discrete_to_continuous(heart_rate, heart_rate_times,
-#                                        sampling_rate)  # Interpolation using 3rd order spline
-#    ecg_df["Heart_Rate"] = heart_rate
+    #    heart_rate = discrete_to_continuous(heart_rate, heart_rate_times,
+    #                                        sampling_rate)  # Interpolation using 3rd order spline
+    #    ecg_df["Heart_Rate"] = heart_rate
 
-    tmp2 = ecg_process(
-        tmp,
-        sampling_rate=1000,
-        filter_type='FIR',
-        filter_band='bandpass',
-        filter_frequency=[0.05, 150],
-        # filter_order=0.3,
-        segmenter='hamilton',
-        quality_model='default'
+    tmp2 = bio_process(
+        ecg=tmp,
+        sampling_rate=100,
+        ecg_filter_type="FIR",
+        ecg_filter_band="bandpass",
+        ecg_filter_frequency=[0.05, 150],
+        ecg_segmenter="hamilton",
+        ecg_quality_model="default",
+        ecg_hrv_features=["time", "frequency", "nonlinear"],
     )
-
 
     # evaluate(X_train, y_train, True)
 
@@ -184,15 +180,58 @@ def main():
     # hf.write_to_csv_from_vector("output_franz.csv", test_index, y_pred, "id")
 
 
+def plot_all():
+    X_train, X_test, y_train, test_index = read_data()
+    y_train = np.squeeze(y_train)
+    X_train = np.nan_to_num(X_train)
+    j = np.random.randint(0, np.size(X_train, axis=0) - 1)
+
+    rus = RandomUnderSampler()
+    X_train, y_train = rus.fit_resample(X_train, y_train)
+
+    skf = StratifiedKFold(n_splits=42, shuffle=True)
+    skf.get_n_splits(X_train, y_train)
+    for train_index, test_index in skf.split(X_train, y_train):
+        X_t, X_test = X_train[train_index], X_train[test_index]
+        y_t, y_test = y_train[train_index], y_train[test_index]
+
+        for j in range(0, np.size(X_test, axis=0)):
+            plt.grid()
+            yi = y_test[j]
+            tmp = X_test[j, :]
+
+            plt.subplot(311)
+            plt.plot(tmp, lw=0.5)
+
+            FFT = abs(np.fft.fft(tmp))
+            freqs = np.fft.fftfreq(tmp.size, 1)
+
+            plt.subplot(312)
+            plt.plot(freqs, 20 * np.log10(FFT), 'x')
+            plt.subplot(313)
+            plt.plot(freqs, FFT)
+
+            plt.savefig("images/plot_" + str(yi) + "_" + str(j).zfill(5) + ".jpg", format='jpg', dpi=1000)
+            plt.clf()
+
+        break
+
+
 def analysis():
     X_train, X_test, y_train, test_index = read_data()
+    signal = X_train[3107, :]
+    Fs = 1000
+    N = len(signal)  # number of samples
+    T = (N - 1) / Fs  # duration
+    ts = np.linspace(0, T, N, endpoint=False)  # relative timestamps
+    pl.plot(ts, signal, lw=0.1)
+    pl.grid()
+    pl.savefig('plot.pdf')
+    out = ecg.ecg(
+        signal=signal,
+        sampling_rate=Fs,
+        show=False
+    )
 
-    for i in range(0, 10):
-        j = np.random.randint(0, np.size(X_train, axis=0) - 1)
-        tmp = X_train[j, :]
 
-        plt.plot(tmp)
-        plt.show()
-
-
-main()
+plot_all()
