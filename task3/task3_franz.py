@@ -1,12 +1,15 @@
+from sklearn.decomposition import PCA
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 import helper_functions as hf
 import matplotlib.pyplot as plt
 import numpy as np
+import sklearn as sk
 from sklearn.model_selection import StratifiedKFold, GridSearchCV
 from sklearn.model_selection import cross_val_score
 from sklearn.metrics import f1_score, make_scorer
-from sklearn.preprocessing import QuantileTransformer
+from sklearn.preprocessing import QuantileTransformer, StandardScaler
 from sklearn.feature_selection import SelectPercentile, SelectKBest
 from sklearn.svm import SVC
 from neurokit import bio_process
@@ -57,10 +60,10 @@ def remove_unimportant_features(data_train, data_test, y):
 
 
 def read_data():
+    X_train, _ = hf.read_hdf_to_matrix("X_train.h5", "id")
+    y_train, _ = hf.read_hdf_to_matrix("y_train.h5", "id")
     X_test, test_index = hf.read_hdf_to_matrix("X_test.h5", "id")
-    X_train, train_index = hf.read_hdf_to_matrix("X_train.h5", "id")
-    y_train, train_index = hf.read_hdf_to_matrix("y_train.h5", "id")
-    return X_train, X_test, y_train, test_index
+    return X_train, X_test, np.squeeze(y_train), test_index
 
 
 def evaluate(X_train, y_train, iid):
@@ -218,7 +221,19 @@ def plot_all():
 
 
 def analysis():
+    print("load data")
     X_train, X_test, y_train, test_index = read_data()
+    X_train = np.nan_to_num(X_train)
+    print("fft")
+    fft = abs(np.fft.ifft(X_train))
+    print(np.shape(fft))
+    print("svd")
+    tsvd = sk.decomposition.truncated_svd.TruncatedSVD(n_components=100)
+    tsvd.fit(fft)
+    print(tsvd.singular_values_)
+
+    """
+    # FFT Analysis
     signal = X_train[3107, :]
     Fs = 1000
     N = len(signal)  # number of samples
@@ -232,6 +247,65 @@ def analysis():
         sampling_rate=Fs,
         show=False
     )
+    """
 
 
-plot_all()
+def test():
+    print("load data")
+    X_train, X_test, y_train, test_index = read_data()
+    y = np.squeeze(y_train)
+    X_train = np.nan_to_num(X_train)
+
+    print("fft")
+    fft = abs(np.fft.ifft(X_train))
+
+    print("pca and scale")
+    pca = PCA(n_components=100)
+    x = pca.fit_transform(fft)
+    ss = StandardScaler()
+    x = ss.fit_transform(x)
+
+    print("clf with cv and score")
+    svc = SVC(
+        C=1.0,
+        gamma='scale',
+        shrinking=True,
+        probability=False,
+        class_weight='balanced',
+        max_iter=10000
+    )
+
+    rfc = RandomForestClassifier(
+        n_estimators=100
+    )
+
+    gbc = GradientBoostingClassifier(
+        n_estimators=100,
+
+    )
+
+    clf = gbc
+    score = make_scorer(f1_score_multi, greater_is_better=True)
+    skfold = StratifiedKFold(n_splits=5, shuffle=False, random_state=42)
+
+#    results = cross_val_score(clf, x, y, cv=skfold, n_jobs=1, scoring=score)
+#    print("Results: %.4f (%.4f) MSE" % (results.mean(), results.std()))
+    """
+    weights = y
+    weights[weights == 0.0] = 5117/3030
+    weights[weights == 1.0] = 5117/443
+    weights[weights == 2.0] = 5117/1474
+    weights[weights == 3.0] = 5117/170
+    """
+    clf.fit(x, y)#, sample_weight=weights)
+
+    xt = np.nan_to_num(X_test)
+    xt = abs(np.fft.ifft(xt))
+    xt = pca.transform(xt)
+    xt = ss.transform(xt)
+    y_pred = clf.predict(xt)
+    hf.write_to_csv_from_vector("output_franz.csv", test_index, y_pred, "id")
+    return
+
+
+test()
