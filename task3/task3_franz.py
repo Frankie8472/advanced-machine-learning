@@ -1,7 +1,14 @@
 from sklearn.decomposition import PCA
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, BaggingClassifier, \
+    ExtraTreesClassifier, AdaBoostClassifier, VotingClassifier
 from sklearn.impute import SimpleImputer
+from sklearn.linear_model import RidgeClassifier, SGDClassifier
+from sklearn.neighbors import KNeighborsClassifier, RadiusNeighborsClassifier
+from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import Pipeline
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.utils.class_weight import compute_sample_weight, compute_class_weight
 import helper_functions as hf
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,12 +18,8 @@ from sklearn.model_selection import cross_val_score
 from sklearn.metrics import f1_score, make_scorer
 from sklearn.preprocessing import QuantileTransformer, StandardScaler
 from sklearn.feature_selection import SelectPercentile, SelectKBest
-from sklearn.svm import SVC
+from sklearn.svm import SVC, LinearSVC
 from neurokit import bio_process
-from biosppy import ecg, storage
-import biosppy as bs
-import pylab as pl
-from imblearn.under_sampling import RandomUnderSampler
 
 """ 
 - Different length of samples
@@ -189,9 +192,6 @@ def plot_all():
     X_train = np.nan_to_num(X_train)
     j = np.random.randint(0, np.size(X_train, axis=0) - 1)
 
-    rus = RandomUnderSampler()
-    X_train, y_train = rus.fit_resample(X_train, y_train)
-
     skf = StratifiedKFold(n_splits=42, shuffle=True)
     skf.get_n_splits(X_train, y_train)
     for train_index, test_index in skf.split(X_train, y_train):
@@ -253,51 +253,158 @@ def analysis():
 def test():
     print("load data")
     X_train, X_test, y_train, test_index = read_data()
-    y = np.squeeze(y_train)
     X_train = np.nan_to_num(X_train)
+    y = y_train
+    class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(y), y=y)
+    sample_weights = compute_sample_weight(class_weight='balanced', y=y)
 
     print("fft")
     fft = abs(np.fft.ifft(X_train))
 
     print("pca and scale")
-    pca = PCA(n_components=100)
-    x = pca.fit_transform(fft)
     ss = StandardScaler()
+    pca = PCA(n_components=100)
+    x = fft
+    x = pca.fit_transform(x)
     x = ss.fit_transform(x)
 
     print("clf with cv and score")
+
+    mlp = MLPClassifier(  # 300 0.67
+        hidden_layer_sizes=(300,),
+        activation="relu",
+        solver='adam',
+        alpha=1.0,
+        batch_size='auto',
+        learning_rate="adaptive",
+        learning_rate_init=0.001,
+        power_t=0.5,
+        max_iter=2000,
+        shuffle=False,
+        random_state=None,
+        tol=1e-4,
+        verbose=False,
+        warm_start=False,
+        momentum=0.9,
+        nesterovs_momentum=True,
+        early_stopping=False,
+        validation_fraction=0.1,
+        beta_1=0.9,
+        beta_2=0.999,
+        epsilon=1e-8,
+        n_iter_no_change=10
+    )  # 0.67
+
+    sgd = SGDClassifier(
+        loss="perceptron",
+        penalty='l2',
+        alpha=1.0,
+        l1_ratio=0.15,
+        fit_intercept=True,
+        max_iter=1000,
+        tol=1e-3,
+        shuffle=False,
+        verbose=0,
+        epsilon=0.1,
+        n_jobs=None,
+        random_state=None,
+        learning_rate="optimal",
+        eta0=0.0,
+        power_t=0.5,
+        early_stopping=False,
+        validation_fraction=0.1,
+        n_iter_no_change=5,
+        class_weight=None,
+        warm_start=False,
+        average=False,
+        n_iter=None
+    )  # 0.59
+
+    rid = RidgeClassifier(
+        alpha=1.0,
+        class_weight=None
+    )  # 0.61
+
+    lsvc = LinearSVC(
+        max_iter=1000,
+        class_weight=None
+    )  # 0.62
+
     svc = SVC(
-        C=1.0,
+        C=3.0,
+        kernel='rbf',
+        degree=3,
         gamma='scale',
         shrinking=True,
-        probability=False,
-        class_weight='balanced',
-        max_iter=10000
-    )
+        probability=True,
+        class_weight=None,
+        max_iter=-1
+    )  # 0.6643
+
+    etc = ExtraTreesClassifier(
+        n_estimators=100,
+        class_weight='balanced'
+    )  # 0.61
 
     rfc = RandomForestClassifier(
-        n_estimators=100
-    )
+        n_estimators=100,
+        class_weight='balanced',
+        max_features='auto'  # None
+    )  # 0.62
+
+    dtc = DecisionTreeClassifier(
+        class_weight='balanced'
+    )  # 0.51
 
     gbc = GradientBoostingClassifier(
         n_estimators=100,
+        max_features='auto'
+    )  # 0.66
 
-    )
+    abc = AdaBoostClassifier(
+        base_estimator=gbc,
+        n_estimators=100
+    )  # 0.64
 
-    clf = gbc
-    score = make_scorer(f1_score_multi, greater_is_better=True)
-    skfold = StratifiedKFold(n_splits=5, shuffle=False, random_state=42)
+    knc = KNeighborsClassifier(
+        n_neighbors=10,
+        weights='uniform',  # 'uniform', 'distance'
+    )  # 0.63
 
-#    results = cross_val_score(clf, x, y, cv=skfold, n_jobs=1, scoring=score)
-#    print("Results: %.4f (%.4f) MSE" % (results.mean(), results.std()))
-    """
-    weights = y
-    weights[weights == 0.0] = 5117/3030
-    weights[weights == 1.0] = 5117/443
-    weights[weights == 2.0] = 5117/1474
-    weights[weights == 3.0] = 5117/170
-    """
-    clf.fit(x, y)#, sample_weight=weights)
+    rnc = RadiusNeighborsClassifier(
+        radius=100.0,
+        weights='uniform'
+    )  # 0.59
+
+    bc = BaggingClassifier(
+        mlp,
+        max_samples=0.7,
+        max_features=0.7
+    )  # 0.67
+
+    estimators = [
+        ('mlp', mlp),
+        ('svc', svc),
+        ('gbc', gbc),
+        ('bc', bc)
+    ]
+
+    vc = VotingClassifier(
+        estimators,
+        voting='soft',
+        weights=None,
+        n_jobs=1,
+        flatten_transform=None
+    )  # soft 0.0.6838, hard: 0.6775
+
+    clf = vc
+    score = make_scorer(f1_score, greater_is_better=True)
+    skfold = StratifiedKFold(n_splits=10, shuffle=False, random_state=42)
+
+    results = cross_val_score(clf, x, y, cv=skfold, n_jobs=5, scoring=score)
+    print("Results: %.4f (%.4f) MSE" % (results.mean(), results.std()))
+
+    clf.fit(x, y)
 
     xt = np.nan_to_num(X_test)
     xt = abs(np.fft.ifft(xt))
@@ -305,7 +412,132 @@ def test():
     xt = ss.transform(xt)
     y_pred = clf.predict(xt)
     hf.write_to_csv_from_vector("output_franz.csv", test_index, y_pred, "id")
+
     return
 
 
-test()
+def risky():
+    print("load data")
+    X_train, X_test, y_train, test_index = read_data()
+    X_train = np.nan_to_num(X_train)
+    X_test = np.nan_to_num(X_test)
+
+    class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(y_train), y=y_train)
+    sample_weights = compute_sample_weight(class_weight='balanced', y=y_train)
+
+    print("ifft")
+    X_test = abs(np.fft.ifft(X_test))
+    X_train = abs(np.fft.ifft(X_train))
+
+    print("clf with cv and score")
+
+    mlp = MLPClassifier(  # 300 0.67
+        hidden_layer_sizes=(300,),
+        activation="relu",
+        solver='adam',
+        alpha=1.0,
+        batch_size='auto',
+        learning_rate="adaptive",
+        learning_rate_init=0.001,
+        power_t=0.5,
+        max_iter=2000,
+        shuffle=False,
+        random_state=None,
+        tol=1e-4,
+        verbose=False,
+        warm_start=False,
+        momentum=0.9,
+        nesterovs_momentum=True,
+        early_stopping=False,
+        validation_fraction=0.1,
+        beta_1=0.9,
+        beta_2=0.999,
+        epsilon=1e-8,
+        n_iter_no_change=10
+    )  # 0.67
+
+    full_labeled, full_y = np.copy(X_train), np.copy(y_train)
+    full_unlabeled = np.copy(X_test)
+    old_full_y_size = 0
+    print(np.size(full_labeled, axis=0))
+    while old_full_y_size != np.size(full_y):
+        old_full_y_size = np.size(full_y)
+
+        ss = StandardScaler()
+        pca = PCA(n_components=100)
+
+        svc = SVC(
+            C=3.0,
+            kernel='rbf',
+            degree=3,
+            gamma='scale',
+            shrinking=True,
+            probability=True,
+            class_weight=None,
+            max_iter=-1
+        )  # 0.6643
+
+        mlp = svc
+
+        transformed_labeled = pca.fit_transform(full_labeled)
+        transformed_unlabeled = pca.transform(full_unlabeled)
+        transformed_labeled = ss.fit_transform(transformed_labeled)
+        transformed_unlabeled = ss.transform(transformed_unlabeled)
+
+        mlp.fit(transformed_labeled, full_y)
+        probability_unlabeled = mlp.predict_proba(transformed_unlabeled)
+        predicted_unlabeled = mlp.predict(transformed_unlabeled)
+
+        for i in range(np.size(probability_unlabeled, 0)):
+            max_prob = np.amax(probability_unlabeled[i])
+            max_prob_class = predicted_unlabeled[i]
+            if max_prob >= 0.9:
+                full_labeled = np.r_[full_labeled, [full_unlabeled[i]]]
+                full_y = np.r_[full_y, max_prob_class]
+                np.delete(full_unlabeled, i, 0)
+
+    print(np.size(full_labeled, axis=0))
+    ss = StandardScaler()
+    pca = PCA(n_components=100)
+    svc = SVC(
+        C=3.0,
+        kernel='rbf',
+        degree=3,
+        gamma='scale',
+        shrinking=True,
+        probability=True,
+        class_weight=None,
+        max_iter=-1
+    )  # 0.6643
+
+    clf = svc
+
+    clf.fit(full_labeled, full_y)
+
+    xt = pca.transform(X_test)
+    xt = ss.transform(xt)
+    y_pred = clf.predict(xt)
+    hf.write_to_csv_from_vector("output_franz.csv", test_index, y_pred, "id")
+
+
+def test2():
+    print("load data")
+    X_train, X_test, y_train, test_index = read_data()
+    X_train = np.nan_to_num(X_train)
+    X_test = np.nan_to_num(X_test)
+
+    class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(y_train), y=y_train)
+    sample_weights = compute_sample_weight(class_weight='balanced', y=y_train)
+
+    print("ifft")
+    X_test = abs(np.fft.ifft(X_test))
+    X_train = abs(np.fft.ifft(X_train))
+
+    print("lda")
+    print(np.size(X_train, axis=1))
+    lda = LinearDiscriminantAnalysis()
+    X_train = lda.fit_transform(X_train, y_train)
+    print(np.size(X_train, axis=1))
+
+
+risky()
