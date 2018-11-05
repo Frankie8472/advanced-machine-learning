@@ -16,7 +16,8 @@ import sklearn as sk
 from sklearn.model_selection import StratifiedKFold, GridSearchCV
 from sklearn.model_selection import cross_val_score
 from sklearn.metrics import f1_score, make_scorer
-from sklearn.preprocessing import QuantileTransformer, StandardScaler
+from sklearn.preprocessing import QuantileTransformer, StandardScaler, MinMaxScaler, RobustScaler, PowerTransformer, \
+    FunctionTransformer
 from sklearn.feature_selection import SelectPercentile, SelectKBest
 from sklearn.svm import SVC, LinearSVC
 from neurokit import bio_process
@@ -253,20 +254,44 @@ def analysis():
 def test():
     print("load data")
     X_train, X_test, y_train, test_index = read_data()
-    X_train = np.nan_to_num(X_train)
+
+    fft = FunctionTransformer(
+        func=np.fft.ifft,
+        inverse_func=np.fft.fft,
+        validate=True,
+        accept_sparse=False,
+        pass_y=False,
+        check_inverse=True
+    )
+
+    si = SimpleImputer(
+        missing_values=np.nan,
+        strategy='most_frequent',
+        fill_value=0
+    )
+    X_train = si.fit_transform(X_train)
+    X_test = si.transform(X_test)
+    X_train = fft.fit_transform(X_train)
+    X_test = fft.transform(X_test)
+
     y = y_train
     class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(y), y=y)
     sample_weights = compute_sample_weight(class_weight='balanced', y=y)
 
     print("fft")
-    fft = abs(np.fft.ifft(X_train))
+    x = abs(np.fft.ifft(X_train))
 
     print("pca and scale")
+    ss = QuantileTransformer(ignore_implicit_zeros=True)
+    ss = RobustScaler()
+    ss = PowerTransformer()
     ss = StandardScaler()
+    pca = SelectKBest(k=100)
+    pca = LinearDiscriminantAnalysis()
     pca = PCA(n_components=100)
-    x = fft
-    x = pca.fit_transform(x)
+    x = pca.fit_transform(x, y)
     x = ss.fit_transform(x)
+    # print(x)
 
     print("clf with cv and score")
 
@@ -397,17 +422,16 @@ def test():
         flatten_transform=None
     )  # soft 0.0.6838, hard: 0.6775
 
-    clf = vc
+    clf = mlp
     score = make_scorer(f1_score, greater_is_better=True)
-    skfold = StratifiedKFold(n_splits=10, shuffle=False, random_state=42)
+    skfold = StratifiedKFold(n_splits=5, shuffle=False, random_state=42)
 
     results = cross_val_score(clf, x, y, cv=skfold, n_jobs=5, scoring=score)
     print("Results: %.4f (%.4f) MSE" % (results.mean(), results.std()))
 
     clf.fit(x, y)
 
-    xt = np.nan_to_num(X_test)
-    xt = abs(np.fft.ifft(xt))
+    xt = abs(np.fft.ifft(X_test))
     xt = pca.transform(xt)
     xt = ss.transform(xt)
     y_pred = clf.predict(xt)
@@ -431,31 +455,6 @@ def risky():
 
     print("clf with cv and score")
 
-    mlp = MLPClassifier(  # 300 0.67
-        hidden_layer_sizes=(300,),
-        activation="relu",
-        solver='adam',
-        alpha=1.0,
-        batch_size='auto',
-        learning_rate="adaptive",
-        learning_rate_init=0.001,
-        power_t=0.5,
-        max_iter=2000,
-        shuffle=False,
-        random_state=None,
-        tol=1e-4,
-        verbose=False,
-        warm_start=False,
-        momentum=0.9,
-        nesterovs_momentum=True,
-        early_stopping=False,
-        validation_fraction=0.1,
-        beta_1=0.9,
-        beta_2=0.999,
-        epsilon=1e-8,
-        n_iter_no_change=10
-    )  # 0.67
-
     full_labeled, full_y = np.copy(X_train), np.copy(y_train)
     full_unlabeled = np.copy(X_test)
     old_full_y_size = 0
@@ -465,6 +464,31 @@ def risky():
 
         ss = StandardScaler()
         pca = PCA(n_components=100)
+
+        mlp = MLPClassifier(  # 300 0.67
+            hidden_layer_sizes=(300,),
+            activation="relu",
+            solver='adam',
+            alpha=1.0,
+            batch_size='auto',
+            learning_rate="adaptive",
+            learning_rate_init=0.001,
+            power_t=0.5,
+            max_iter=2000,
+            shuffle=False,
+            random_state=None,
+            tol=1e-4,
+            verbose=False,
+            warm_start=False,
+            momentum=0.9,
+            nesterovs_momentum=True,
+            early_stopping=False,
+            validation_fraction=0.1,
+            beta_1=0.9,
+            beta_2=0.999,
+            epsilon=1e-8,
+            n_iter_no_change=10
+        )  # 0.67
 
         svc = SVC(
             C=3.0,
@@ -540,4 +564,4 @@ def test2():
     print(np.size(X_train, axis=1))
 
 
-risky()
+test()
