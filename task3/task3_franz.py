@@ -287,6 +287,7 @@ def test():
     ss = PowerTransformer()
     ss = StandardScaler()
     pca = SelectKBest(k=100)
+    pca = QuadraticDiscriminantAnalysis()
     pca = LinearDiscriminantAnalysis()
     pca = PCA(n_components=100)
     x = pca.fit_transform(x, y)
