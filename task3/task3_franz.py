@@ -1,9 +1,11 @@
-from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA, TruncatedSVD, LatentDirichletAllocation, NMF, FastICA, FactorAnalysis, \
+    DictionaryLearning
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, BaggingClassifier, \
     ExtraTreesClassifier, AdaBoostClassifier, VotingClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import RidgeClassifier, SGDClassifier
+from sklearn.multiclass import OneVsRestClassifier, OneVsOneClassifier
 from sklearn.neighbors import KNeighborsClassifier, RadiusNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import Pipeline
@@ -13,14 +15,16 @@ import helper_functions as hf
 import matplotlib.pyplot as plt
 import numpy as np
 import sklearn as sk
+import scipy.interpolate as spi
 from sklearn.model_selection import StratifiedKFold, GridSearchCV
 from sklearn.model_selection import cross_val_score
 from sklearn.metrics import f1_score, make_scorer
 from sklearn.preprocessing import QuantileTransformer, StandardScaler, MinMaxScaler, RobustScaler, PowerTransformer, \
-    FunctionTransformer
-from sklearn.feature_selection import SelectPercentile, SelectKBest
+    FunctionTransformer, OneHotEncoder, LabelBinarizer
+from sklearn.feature_selection import SelectPercentile, SelectKBest, chi2, f_classif, mutual_info_classif, RFECV
 from sklearn.svm import SVC, LinearSVC
-from neurokit import bio_process
+from neurokit import bio_process, ecg_process
+from biosppy import ecg
 
 """ 
 - Different length of samples
@@ -155,37 +159,6 @@ def predict(X_train, y_train, X_test):
 
 
 # Main function
-def main():
-    X_train, X_test, y_train, test_index = read_data()
-    y_train = np.squeeze(y_train)
-    tmp = X_train[3106, ~np.isnan(X_train[3106, :])]
-    tmp = X_train[3107, :]
-    # temp = np.concatenate((X_train[3107,enate((X_train[3107, :], np.concatenate((X_train[3107, :], X_train[3107, :]))))))
-    # print(biosppy.signals.ecg.ecg(X_train[3107]))
-    # print(ecg_hrv())
-    # rpeaks, = biosppy.ecg.hamilton_segmenter(signal=filtered, sampling_rate=sampling_rate)
-    # print(rpeaks)
-    #    heart_rate = discrete_to_continuous(heart_rate, heart_rate_times,
-    #                                        sampling_rate)  # Interpolation using 3rd order spline
-    #    ecg_df["Heart_Rate"] = heart_rate
-
-    tmp2 = bio_process(
-        ecg=tmp,
-        sampling_rate=100,
-        ecg_filter_type="FIR",
-        ecg_filter_band="bandpass",
-        ecg_filter_frequency=[0.05, 150],
-        ecg_segmenter="hamilton",
-        ecg_quality_model="default",
-        ecg_hrv_features=["time", "frequency", "nonlinear"],
-    )
-
-    # evaluate(X_train, y_train, True)
-
-    # y_pred = predict(X_train, y_train, X_test)
-
-    # hf.write_to_csv_from_vector("output_franz.csv", test_index, y_pred, "id")
-
 
 def plot_all():
     X_train, X_test, y_train, test_index = read_data()
@@ -221,52 +194,66 @@ def plot_all():
         break
 
 
-def analysis():
-    print("load data")
-    X_train, X_test, y_train, test_index = read_data()
-    X_train = np.nan_to_num(X_train)
-    print("fft")
-    fft = abs(np.fft.ifft(X_train))
-    print(np.shape(fft))
-    print("svd")
-    tsvd = sk.decomposition.truncated_svd.TruncatedSVD(n_components=100)
-    tsvd.fit(fft)
-    print(tsvd.singular_values_)
+def feature_selection(x, xt):
+    features = 5
+    fs01 = DictionaryLearning(n_components=features)
+    fs02 = FactorAnalysis(n_components=features)
+    fs03 = FastICA(n_components=features)
+    fs04 = NMF(n_components=features)
+    fs05 = LatentDirichletAllocation(n_components=features)
+    fs06 = TruncatedSVD(n_components=features)
+    fs07 = SelectKBest(score_func=chi2, k=features)
+    fs08 = SelectKBest(score_func=f_classif, k=features)
+    fs09 = SelectKBest(score_func=mutual_info_classif, k=features)
+    fs10 = LinearDiscriminantAnalysis(n_components=features)
+    fs11 = PCA(n_components=features, whiten=True)
+    #rfecv = RFECV(fs01)
+    x_out = np.c_[
+        fs01.fit_transform(x),
+        fs02.fit_transform(x),
+        fs03.fit_transform(x),
+        fs04.fit_transform(x),
+        fs05.fit_transform(x),
+        fs06.fit_transform(x),
+        fs07.fit_transform(x),
+        fs08.fit_transform(x),
+        fs09.fit_transform(x),
+        fs10.fit_transform(x),
+        fs11.fit_transform(x)
+    ]
 
-    """
-    # FFT Analysis
-    signal = X_train[3107, :]
-    Fs = 1000
-    N = len(signal)  # number of samples
-    T = (N - 1) / Fs  # duration
-    ts = np.linspace(0, T, N, endpoint=False)  # relative timestamps
-    pl.plot(ts, signal, lw=0.1)
-    pl.grid()
-    pl.savefig('plot.pdf')
-    out = ecg.ecg(
-        signal=signal,
-        sampling_rate=Fs,
-        show=False
-    )
-    """
+    xt_out = np.c_[
+        fs01.transform(xt),
+        fs02.transform(xt),
+        fs03.transform(xt),
+        fs04.transform(xt),
+        fs05.transform(xt),
+        fs06.transform(xt),
+        fs07.transform(xt),
+        fs08.transform(xt),
+        fs09.transform(xt),
+        fs10.transform(xt),
+        fs11.transform(xt)
+    ]
+
+    return x_out, xt_out
 
 
 def test():
     print("load data")
     X_train, X_test, y_train, test_index = read_data()
 
+    print("fft")
     fft = FunctionTransformer(
-        func=np.fft.ifft,
-        inverse_func=np.fft.fft,
+        func=lambda m: abs(np.fft.ifft(m)),
         validate=True,
         accept_sparse=False,
-        pass_y=False,
-        check_inverse=True
+        check_inverse=False
     )
 
     si = SimpleImputer(
         missing_values=np.nan,
-        strategy='most_frequent',
+        strategy='constant',   # 'mean', 'median', 'most_frequent', 'constant'
         fill_value=0
     )
     X_train = si.fit_transform(X_train)
@@ -274,28 +261,24 @@ def test():
     X_train = fft.fit_transform(X_train)
     X_test = fft.transform(X_test)
 
+    x = X_train
     y = y_train
+    xt = X_test
     class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(y), y=y)
     sample_weights = compute_sample_weight(class_weight='balanced', y=y)
 
-    print("fft")
-    x = abs(np.fft.ifft(X_train))
-
     print("pca and scale")
-    ss = QuantileTransformer(ignore_implicit_zeros=True)
-    ss = RobustScaler()
-    ss = PowerTransformer()
+    qt = QuantileTransformer(ignore_implicit_zeros=True)
+    rs = RobustScaler()
+    pt = PowerTransformer()
     ss = StandardScaler()
-    pca = SelectKBest(k=100)
-    pca = QuadraticDiscriminantAnalysis()
-    pca = LinearDiscriminantAnalysis()
-    pca = PCA(n_components=100)
-    x = pca.fit_transform(x, y)
+
     x = ss.fit_transform(x)
-    # print(x)
+    xt = ss.transform(xt)
 
-    print("clf with cv and score")
+    x, xt = feature_selection(x, xt)
 
+    print("clf with cv=5 and score")
     mlp = MLPClassifier(  # 300 0.67
         hidden_layer_sizes=(300,),
         activation="relu",
@@ -423,18 +406,25 @@ def test():
         flatten_transform=None
     )  # soft 0.0.6838, hard: 0.6775
 
-    clf = mlp
-    score = make_scorer(f1_score, greater_is_better=True)
-    skfold = StratifiedKFold(n_splits=5, shuffle=False, random_state=42)
+    ovr = OneVsRestClassifier(
+        svc,
+        n_jobs=1
+    )
 
-    results = cross_val_score(clf, x, y, cv=skfold, n_jobs=5, scoring=score)
+    ovo = OneVsOneClassifier(
+        svc,
+        n_jobs=1
+    )
+
+    clf = svc
+    score = make_scorer(f1_score, greater_is_better=True)
+
+    results = cross_val_score(clf, x, y, cv=5, n_jobs=2, scoring=score, pre_dispatch='2*n_jobs')
     print("Results: %.4f (%.4f) MSE" % (results.mean(), results.std()))
 
+    print("create output file")
     clf.fit(x, y)
 
-    xt = abs(np.fft.ifft(X_test))
-    xt = pca.transform(xt)
-    xt = ss.transform(xt)
     y_pred = clf.predict(xt)
     hf.write_to_csv_from_vector("output_franz.csv", test_index, y_pred, "id")
 
@@ -545,24 +535,48 @@ def risky():
     hf.write_to_csv_from_vector("output_franz.csv", test_index, y_pred, "id")
 
 
-def test2():
+def analysis():
     print("load data")
     X_train, X_test, y_train, test_index = read_data()
+    x = X_train[5, :]
+    x = x[~np.isnan(x)]
+
+    plt.subplot(311)
+    plt.plot(x, lw=0.5)
+
+    FFT = abs(np.fft.ifft(x))
+    freqs = np.fft.fftfreq(x.size, 1)
+    plt.subplot(312)
+    plt.plot(freqs, np.log10(FFT), 'x')
+    plt.subplot(313)
+    plt.plot(freqs, FFT, 'x')
+    plt.show()
+
+    return
+
+    x = np.nan_to_num(x)
+    x_new = spi.UnivariateSpline(np.arange(0, np.size(x)), x)
+    plt.subplot(411)
+    plt.plot(np.arange(0, np.size(x)), x)
+    plt.subplot(412)
+    plt.plot(np.arange(0, np.size(x)), abs(np.fft.ifft(x)))
+    plt.subplot(413)
+    plt.plot(np.arange(0, np.size(x_old)), x_old)
+    plt.subplot(414)
+    plt.plot(np.arange(0, np.size(x_old)), x_new(np.arange(0, np.size(x_old))))
+    #plt.show()
+
+    return
+
+
     X_train = np.nan_to_num(X_train)
-    X_test = np.nan_to_num(X_test)
-
-    class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(y_train), y=y_train)
-    sample_weights = compute_sample_weight(class_weight='balanced', y=y_train)
-
-    print("ifft")
-    X_test = abs(np.fft.ifft(X_test))
-    X_train = abs(np.fft.ifft(X_train))
-
-    print("lda")
-    print(np.size(X_train, axis=1))
-    lda = LinearDiscriminantAnalysis()
-    X_train = lda.fit_transform(X_train, y_train)
-    print(np.size(X_train, axis=1))
+    print("fft")
+    fft = abs(np.fft.ifft(X_train))
+    print(np.shape(fft))
+    print("svd")
+    tsvd = sk.decomposition.truncated_svd.TruncatedSVD(n_components=100)
+    tsvd.fit(fft)
+    print(tsvd.singular_values_)
 
 
 test()
