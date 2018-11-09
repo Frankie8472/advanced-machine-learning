@@ -596,23 +596,36 @@ def main():
     X_train, X_test, y_train, test_index = read_data()
 
     new_x = []
+    new_t = []
+
     print("select features")
 
     ss = StandardScaler()
-    fica = FastICA(n_components=2)
+    fica = FastICA(n_components=20)
     fft = np.copy(X_train)
     fft = np.nan_to_num(fft)
     fft = abs(np.fft.ifft(fft))
     fft = ss.fit_transform(fft)
     fft = fica.fit_transform(fft)
 
+    fft_t = np.copy(X_test)
+    fft_t = np.nan_to_num(fft_t)
+    fft_t = abs(np.fft.ifft(fft_t))
+    fft_t = ss.transform(fft_t)
+    fft_t = fica.transform(fft_t)
+
     ss = StandardScaler()
-    fica = FastICA(n_components=2)
+    fica = PCA(n_components=20)
 
     X_feat = np.copy(X_train)
     X_feat = np.nan_to_num(X_feat)
     X_feat = ss.fit_transform(X_feat)
     X_feat = fica.fit_transform(X_feat)
+
+    X_feat_t = np.copy(X_test)
+    X_feat_t = np.nan_to_num(X_feat_t)
+    X_feat_t = ss.transform(X_feat_t)
+    X_feat_t = fica.transform(X_feat_t)
 
     for row in range(0, np.size(X_train, axis=0)):
         x = X_train[row, :]
@@ -620,9 +633,25 @@ def main():
         # cA, cD = pt.dwt(x, 'db2')
         sample_ecg = ecg.ecg(x, 300, False)
         rpeaks = np.diff(sample_ecg['rpeaks'])
+        if np.size(rpeaks) <= 5:
+            print(np.size(rpeaks))
         new_x.append([rpeaks.mean(), rpeaks.std()])
 
+    print("==========================================")
+
+    for row in range(0, np.size(X_test, axis=0)):
+        x = X_test[row, :]
+        x = x[~np.isnan(x)]
+        # cA, cD = pt.dwt(x, 'db2')
+        sample_ecg = ecg.ecg(x, 300, False)
+        rpeaks = np.diff(sample_ecg['rpeaks'])
+        if np.size(rpeaks) <= 5:
+            print(np.size(rpeaks))
+        new_t.append([rpeaks.mean(), rpeaks.std()])
+
+    new_t = np.c_[X_feat_t, fft_t, new_t]
     new_x = np.c_[X_feat, fft, new_x]
+
     svc = SVC(
         C=1.0,
         kernel='rbf',
@@ -662,7 +691,7 @@ def main():
     )  # 0.67
 
     gbc = GradientBoostingClassifier(
-        n_estimators=100,
+        n_estimators=1000,
         max_features='auto'
     )  # 0.66
 
@@ -678,5 +707,8 @@ def main():
     results = cross_val_score(pipeline, new_x, y_train, cv=5, n_jobs=1, scoring=scorer())
     print("Results: %.4f (%.4f) MSE" % (results.mean(), results.std()))
 
+    clf.fit(new_x, y_train)
+    y_pred = clf.predict(new_t)
+    hf.write_to_csv_from_vector("output_franz.csv", test_index, y_pred, "id")
 
 main()
