@@ -1,6 +1,8 @@
+from biosppy.signals import tools
+from biosppy.signals.ecg import hamilton_segmenter, correct_rpeaks
 from sklearn.decomposition import PCA, TruncatedSVD, LatentDirichletAllocation, NMF, FastICA, FactorAnalysis, \
     DictionaryLearning
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, BaggingClassifier, \
     ExtraTreesClassifier, AdaBoostClassifier, VotingClassifier
 from sklearn.impute import SimpleImputer
@@ -19,52 +21,19 @@ import scipy.interpolate as spi
 from sklearn.model_selection import StratifiedKFold, GridSearchCV
 from sklearn.model_selection import cross_val_score
 from sklearn.metrics import f1_score, make_scorer
-from sklearn.preprocessing import QuantileTransformer, StandardScaler, MinMaxScaler, RobustScaler, PowerTransformer, \
-    FunctionTransformer, OneHotEncoder, LabelBinarizer
+from sklearn.preprocessing import QuantileTransformer, StandardScaler, RobustScaler, PowerTransformer, \
+    FunctionTransformer
 from sklearn.feature_selection import SelectPercentile, SelectKBest, chi2, f_classif, mutual_info_classif, RFECV
 from sklearn.svm import SVC, LinearSVC
-from neurokit import bio_process, ecg_process
 from biosppy import ecg
+import pywt as pt
 
 """ 
 - Different length of samples
 - 4 classes: 0.0, 1.0, 2.0, 3.0
 - Occurences: 0: 3030, 2: 1474, 1: 443, 3: 170 --> resampling
-- ECG's (x,y): (1e-3 s, 1e-6 V) 
+- ECG's (x,y): (1e-3 s, 1e-6 V) 300 Hz
 """
-
-
-# Feature analysis
-# Scale features between 0 and 1
-def scale_features(data_train, data_test):
-    qt = QuantileTransformer(
-        n_quantiles=1000,
-        output_distribution='uniform',
-        ignore_implicit_zeros=False,
-        subsample=int(1e5),
-        random_state=None,
-        copy=True
-
-    )
-    data_train = qt.fit_transform(data_train)
-    data_test = qt.transform(data_test)
-    return data_train, data_test
-
-
-def add_missing_data(incomplete_data_train, incomplete_data_test):
-    imp = SimpleImputer(missing_values=np.nan, strategy="median")  # "mean", "median", "most_frequent"
-    data_train = imp.fit_transform(incomplete_data_train)
-    data_test = imp.transform(incomplete_data_test)
-    return data_train, data_test
-
-
-def remove_unimportant_features(data_train, data_test, y):
-    ft = SelectPercentile(percentile=50)
-    ft = SelectKBest(k=50)
-    ft.fit(data_train, y)
-    data_train = ft.transform(data_train)
-    data_test = ft.transform(data_test)
-    return data_train, data_test
 
 
 def read_data():
@@ -74,7 +43,11 @@ def read_data():
     return X_train, X_test, np.squeeze(y_train), test_index
 
 
-def evaluate(X_train, y_train, iid):
+def make_pipeline():
+    return Pipeline(feature_transformer(), classifier())
+
+
+def grid_search(X_train, y_train, iid):
     estimator = [
         ('qt', QuantileTransformer()),
         ('sp', SelectPercentile()),
@@ -126,19 +99,19 @@ def evaluate(X_train, y_train, iid):
     print("======================================================================================")
 
 
-def f1_score_multi(y_true, y_pred):
-    return f1_score(y_true, y_pred, average='micro')
+def scorer():
+    return make_scorer(f1_score, greater_is_better=True)
 
 
-def predict(X_train, y_train, X_test):
-    X_train, X_test = add_missing_data(X_train, X_test)
-    X_train, X_test = scale_features(X_train, X_test)
-    X_train, X_test = remove_unimportant_features(X_train, X_test, y_train)
+def f1_score_micro(y_true, y_pred, **kwargs):
+    return f1_score(y_true=y_true, y_pred=y_pred, average='micro', **kwargs)
 
-    score = make_scorer(f1_score_multi, greater_is_better=True)
-    print("==== Eval ====")
-    skfold = StratifiedKFold(n_splits=5, shuffle=False, random_state=42)
 
+def feature_transformer():
+    return
+
+
+def classifier():
     svc = SVC(
         C=1.0,
         kernel='rbf',
@@ -148,17 +121,29 @@ def predict(X_train, y_train, X_test):
         class_weight='balanced',
         verbose=False,
         max_iter=-1,
-        decision_function_shape='ovr',
-
+        decision_function_shape='ovr'
     )
 
-    results = cross_val_score(svc, X_train, y_train, cv=skfold, n_jobs=1, scoring=score)
+    clf = svc
+    return clf
+
+
+def evaluate():
+    X_train, _, y_train, _ = read_data()
+    pipe = make_pipeline()
+    results = cross_val_score(pipe, X_train, y_train, cv=5, n_jobs=1, scoring=scorer())
     print("Results: %.4f (%.4f) MSE" % (results.mean(), results.std()))
-    svc.fit(X_train, y_train)
-    return svc.predict(X_test)
+    return
 
 
-# Main function
+def predict():
+    X_train, X_test, y_train, test_index = read_data()
+    pipe = make_pipeline()
+    pipe.fit(X_train, y_train)
+    y_pred = pipe.predict(X_test)
+    hf.write_to_csv_from_vector("output_franz.csv", test_index, y_pred, "id")
+    return
+
 
 def plot_all():
     X_train, X_test, y_train, test_index = read_data()
@@ -206,8 +191,9 @@ def feature_selection(x, xt):
     fs08 = SelectKBest(score_func=f_classif, k=features)
     fs09 = SelectKBest(score_func=mutual_info_classif, k=features)
     fs10 = LinearDiscriminantAnalysis(n_components=features)
-    fs11 = PCA(n_components=features, whiten=True)
-    #rfecv = RFECV(fs01)
+    fs11 = PCA(n_components=100, whiten=True)
+    # rfecv = RFECV(fs01)
+    x = fs11.fit_transform(x)
     x_out = np.c_[
         fs01.fit_transform(x),
         fs02.fit_transform(x),
@@ -218,8 +204,7 @@ def feature_selection(x, xt):
         fs07.fit_transform(x),
         fs08.fit_transform(x),
         fs09.fit_transform(x),
-        fs10.fit_transform(x),
-        fs11.fit_transform(x)
+        fs10.fit_transform(x)
     ]
 
     xt_out = np.c_[
@@ -232,8 +217,7 @@ def feature_selection(x, xt):
         fs07.transform(xt),
         fs08.transform(xt),
         fs09.transform(xt),
-        fs10.transform(xt),
-        fs11.transform(xt)
+        fs10.transform(xt)
     ]
 
     return x_out, xt_out
@@ -253,7 +237,7 @@ def test():
 
     si = SimpleImputer(
         missing_values=np.nan,
-        strategy='constant',   # 'mean', 'median', 'most_frequent', 'constant'
+        strategy='constant',  # 'mean', 'median', 'most_frequent', 'constant'
         fill_value=0
     )
     X_train = si.fit_transform(X_train)
@@ -268,10 +252,10 @@ def test():
     sample_weights = compute_sample_weight(class_weight='balanced', y=y)
 
     print("pca and scale")
-    qt = QuantileTransformer(ignore_implicit_zeros=True)
     rs = RobustScaler()
     pt = PowerTransformer()
     ss = StandardScaler()
+    ss = QuantileTransformer()
 
     x = ss.fit_transform(x)
     xt = ss.transform(xt)
@@ -541,6 +525,8 @@ def analysis():
     x = X_train[5, :]
     x = x[~np.isnan(x)]
 
+    ecg.ecg(signal=x, sampling_rate=300)
+
     plt.subplot(311)
     plt.plot(x, lw=0.5)
 
@@ -564,10 +550,9 @@ def analysis():
     plt.plot(np.arange(0, np.size(x_old)), x_old)
     plt.subplot(414)
     plt.plot(np.arange(0, np.size(x_old)), x_new(np.arange(0, np.size(x_old))))
-    #plt.show()
+    # plt.show()
 
     return
-
 
     X_train = np.nan_to_num(X_train)
     print("fft")
@@ -579,4 +564,119 @@ def analysis():
     print(tsvd.singular_values_)
 
 
-test()
+def extract_rpeaks(signal, sampling_rate):
+    if signal is None:
+        raise TypeError("Please specify an input signal.")
+    signal = np.array(signal)
+    sampling_rate = float(sampling_rate)
+    order = int(0.3 * sampling_rate)
+    filtered, _, _ = tools.filter_signal(
+        signal=signal,
+        ftype='FIR',
+        band='bandpass',
+        order=order,
+        frequency=[3, 45],
+        sampling_rate=sampling_rate
+    )
+
+    # segment
+    rpeaks, = hamilton_segmenter(signal=filtered, sampling_rate=sampling_rate)
+
+    # correct R-peak locations
+    rpeaks, = correct_rpeaks(signal=filtered,
+                             rpeaks=rpeaks,
+                             sampling_rate=sampling_rate,
+                             tol=0.05)
+
+    return rpeaks
+
+
+def main():
+    print("read data")
+    X_train, X_test, y_train, test_index = read_data()
+
+    new_x = []
+    print("select features")
+
+    ss = StandardScaler()
+    fica = FastICA(n_components=2)
+    fft = np.copy(X_train)
+    fft = np.nan_to_num(fft)
+    fft = abs(np.fft.ifft(fft))
+    fft = ss.fit_transform(fft)
+    fft = fica.fit_transform(fft)
+
+    ss = StandardScaler()
+    fica = FastICA(n_components=2)
+
+    X_feat = np.copy(X_train)
+    X_feat = np.nan_to_num(X_feat)
+    X_feat = ss.fit_transform(X_feat)
+    X_feat = fica.fit_transform(X_feat)
+
+    for row in range(0, np.size(X_train, axis=0)):
+        x = X_train[row, :]
+        x = x[~np.isnan(x)]
+        # cA, cD = pt.dwt(x, 'db2')
+        sample_ecg = ecg.ecg(x, 300, False)
+        rpeaks = np.diff(sample_ecg['rpeaks'])
+        new_x.append([rpeaks.mean(), rpeaks.std()])
+
+    new_x = np.c_[X_feat, fft, new_x]
+    svc = SVC(
+        C=1.0,
+        kernel='rbf',
+        gamma='scale',
+        shrinking=True,
+        probability=True,
+        class_weight='balanced',
+        verbose=False,
+        max_iter=-1,
+        decision_function_shape='ovr',
+
+    )
+
+    mlp = MLPClassifier(  # 300 0.67
+        hidden_layer_sizes=(300,),
+        activation="relu",
+        solver='adam',
+        alpha=1.0,
+        batch_size='auto',
+        learning_rate="adaptive",
+        learning_rate_init=0.001,
+        power_t=0.5,
+        max_iter=2000,
+        shuffle=False,
+        random_state=None,
+        tol=1e-4,
+        verbose=False,
+        warm_start=False,
+        momentum=0.9,
+        nesterovs_momentum=True,
+        early_stopping=False,
+        validation_fraction=0.1,
+        beta_1=0.9,
+        beta_2=0.999,
+        epsilon=1e-8,
+        n_iter_no_change=10
+    )  # 0.67
+
+    gbc = GradientBoostingClassifier(
+        n_estimators=100,
+        max_features='auto'
+    )  # 0.66
+
+    clf = gbc
+
+    steps = [
+        #('ss', ss),
+        ('clf', clf)
+    ]
+
+    pipeline = Pipeline(steps)
+
+    results = cross_val_score(pipeline, new_x, y_train, cv=5, n_jobs=1, scoring=scorer())
+    print("Results: %.4f (%.4f) MSE" % (results.mean(), results.std()))
+
+
+main()
