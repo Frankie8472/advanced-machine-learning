@@ -1,3 +1,7 @@
 *.idea
 *.ipynb_checkpoints
+task1/input/y_train.csv
+task1/input/X_train.csv
+task1/input/X_test.csv
+task1/input/sample.csv
 images
