@@ -26,6 +26,11 @@ from sklearn.preprocessing import QuantileTransformer, StandardScaler, RobustSca
 from sklearn.feature_selection import SelectPercentile, SelectKBest, chi2, f_classif, mutual_info_classif, RFECV
 from sklearn.svm import SVC, LinearSVC
 from biosppy import ecg
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, Activation
+from keras.wrappers.scikit_learn import KerasClassifier
+from keras.utils import np_utils
+from keras.optimizers import Adam, SGD, RMSprop
 import pywt as pt
 
 """ 
@@ -591,6 +596,41 @@ def extract_rpeaks(signal, sampling_rate):
     return rpeaks
 
 
+def RRIntervalExtraction(X_train):
+    X_train_2 = []
+    new_x = []
+    for row in range(0, np.size(X_train, axis=0)):
+        x = X_train[row, :]
+        x = x[~np.isnan(x)]
+        # cA, cD = pt.dwt(x, 'db2')
+        sample_ecg = ecg.ecg(x, 300, False)
+
+        mean_rr_I = np.mean(sample_ecg['templates'], 0)
+        var_rr_I = np.var(sample_ecg['templates'], 0)
+        cA, cD = pt.dwt(mean_rr_I, 'db2')
+
+        X_train_2.append(np.concatenate((cA, cD, var_rr_I)))
+
+        rpeaks = np.diff(sample_ecg['rpeaks'])
+        if np.size(rpeaks) <= 5:
+            print(np.size(rpeaks))
+        new_x.append([rpeaks.mean(), rpeaks.std()])
+    return X_train_2, new_x
+
+
+def MLPNN_model():
+    size = 512
+    model = Sequential()
+    model.add(Dense(size, input_dim=364, activation='relu'))
+    model.add(Dense(size, activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(size, activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(4, activation='softmax'))
+    model.compile(loss='categorical_crossentropy', optimizer=RMSprop(), metrics=['accuracy'])
+    return model
+
+
 def main():
     print("read data")
     X_train, X_test, y_train, test_index = read_data()
@@ -600,6 +640,12 @@ def main():
 
     print("select features")
 
+    X_train_2, new_x = RRIntervalExtraction(X_train)
+
+    X_test_2, new_t = RRIntervalExtraction(X_test)
+
+    # random franz features
+    '''
     ss = StandardScaler()
     fica = FastICA(n_components=20)
     fft = np.copy(X_train)
@@ -626,31 +672,10 @@ def main():
     X_feat_t = np.nan_to_num(X_feat_t)
     X_feat_t = ss.transform(X_feat_t)
     X_feat_t = fica.transform(X_feat_t)
+    '''
 
-    for row in range(0, np.size(X_train, axis=0)):
-        x = X_train[row, :]
-        x = x[~np.isnan(x)]
-        # cA, cD = pt.dwt(x, 'db2')
-        sample_ecg = ecg.ecg(x, 300, False)
-        rpeaks = np.diff(sample_ecg['rpeaks'])
-        if np.size(rpeaks) <= 5:
-            print(np.size(rpeaks))
-        new_x.append([rpeaks.mean(), rpeaks.std()])
-
-    print("==========================================")
-
-    for row in range(0, np.size(X_test, axis=0)):
-        x = X_test[row, :]
-        x = x[~np.isnan(x)]
-        # cA, cD = pt.dwt(x, 'db2')
-        sample_ecg = ecg.ecg(x, 300, False)
-        rpeaks = np.diff(sample_ecg['rpeaks'])
-        if np.size(rpeaks) <= 5:
-            print(np.size(rpeaks))
-        new_t.append([rpeaks.mean(), rpeaks.std()])
-
-    new_t = np.c_[X_feat_t, fft_t, new_t]
-    new_x = np.c_[X_feat, fft, new_x]
+    new_t = np.c_[X_test_2, new_t]
+    new_x = np.c_[X_train_2, new_x]
 
     svc = SVC(
         C=1.0,
@@ -690,6 +715,8 @@ def main():
         n_iter_no_change=10
     )  # 0.67
 
+    mlp2 = KerasClassifier(build_fn=MLPNN_model, epochs=40, batch_size=256, verbose=1)
+
     gbc = GradientBoostingClassifier(
         n_estimators=1000,
         max_features='auto'
@@ -698,17 +725,18 @@ def main():
     clf = gbc
 
     steps = [
-        #('ss', ss),
+        # ('ss', ss),
         ('clf', clf)
     ]
 
     pipeline = Pipeline(steps)
 
-    results = cross_val_score(pipeline, new_x, y_train, cv=5, n_jobs=1, scoring=scorer())
+    results = cross_val_score(pipeline, new_x, y_train, cv=5, scoring=scorer())
     print("Results: %.4f (%.4f) MSE" % (results.mean(), results.std()))
 
     clf.fit(new_x, y_train)
     y_pred = clf.predict(new_t)
     hf.write_to_csv_from_vector("output_franz.csv", test_index, y_pred, "id")
+
 
 main()
