@@ -1,3 +1,4 @@
+import pandas as pd
 from biosppy.signals import tools
 from biosppy.signals.ecg import hamilton_segmenter, correct_rpeaks
 from sklearn.decomposition import PCA, TruncatedSVD, LatentDirichletAllocation, NMF, FastICA, FactorAnalysis, \
@@ -25,6 +26,7 @@ from sklearn.preprocessing import QuantileTransformer, StandardScaler, RobustSca
     FunctionTransformer
 from sklearn.feature_selection import SelectPercentile, SelectKBest, chi2, f_classif, mutual_info_classif, RFECV
 from sklearn.svm import SVC, LinearSVC
+from sklearn.feature_selection import f_regression, SelectKBest
 from biosppy import ecg
 from keras.models import Sequential
 from keras.layers import Dense, Dropout, Activation
@@ -105,7 +107,7 @@ def grid_search(X_train, y_train, iid):
 
 
 def scorer():
-    return make_scorer(f1_score, greater_is_better=True)
+    return make_scorer(f1_score_micro, greater_is_better=True)
 
 
 def f1_score_micro(y_true, y_pred, **kwargs):
@@ -607,7 +609,7 @@ def RRIntervalExtraction(X_train):
 
         mean_rr_I = np.mean(sample_ecg['templates'], 0)
         var_rr_I = np.var(sample_ecg['templates'], 0)
-        cA, cD = pt.dwt(mean_rr_I, 'db2')
+        cA, cD = pt.dwt(mean_rr_I, 'db3')
 
         X_train_2.append(np.concatenate((cA, cD, var_rr_I)))
 
@@ -638,14 +640,14 @@ def main():
     new_x = []
     new_t = []
 
-    print("select features")
+    print("select chris features")
 
     X_train_2, new_x = RRIntervalExtraction(X_train)
 
     X_test_2, new_t = RRIntervalExtraction(X_test)
 
-    # random franz features
-    '''
+    print("select franz features")
+
     ss = StandardScaler()
     fica = FastICA(n_components=20)
     fft = np.copy(X_train)
@@ -672,10 +674,29 @@ def main():
     X_feat_t = np.nan_to_num(X_feat_t)
     X_feat_t = ss.transform(X_feat_t)
     X_feat_t = fica.transform(X_feat_t)
+
+    print("rescale chris features")
+
+    #testing to transform data with standard scalar
+    new_x = ss.fit_transform(new_x)
+    new_t = ss.transform(new_t)
+    X_train_2 = ss.fit_transform(X_train_2)
+    X_test_2 = ss.transform(X_test_2)
+
+    print("combine features")
+
+    new_t = np.c_[X_test_2, X_feat_t, new_t]
+    new_x = np.c_[X_train_2, X_feat, new_x]
+
+    print("select best features")
+
+    '''
+    # Do a feature selection
+    selector = SelectKBest(f_regression, k=200)
+    new_x = selector.fit_transform(new_x, y_train)
+    new_t = selector.transform(new_t)
     '''
 
-    new_t = np.c_[X_test_2, new_t]
-    new_x = np.c_[X_train_2, new_x]
 
     svc = SVC(
         C=1.0,
@@ -731,9 +752,12 @@ def main():
 
     pipeline = Pipeline(steps)
 
+    print("start cross_val")
+
     results = cross_val_score(pipeline, new_x, y_train, cv=5, scoring=scorer())
     print("Results: %.4f (%.4f) MSE" % (results.mean(), results.std()))
 
+    print("\n Final fitting")
     clf.fit(new_x, y_train)
     y_pred = clf.predict(new_t)
     hf.write_to_csv_from_vector("output_franz.csv", test_index, y_pred, "id")
