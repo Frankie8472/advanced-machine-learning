@@ -70,7 +70,7 @@ def preprocessing(X_train, X_test):
         cA, cD = pt.dwt(mean_rr_I, 'db3')
 
         X_train_filtered.append(np.pad(filtered_signal, (0, 18154 - len(filtered_signal)), mode='constant'))
-        X_train_new.append(np.concatenate(([mean_hr, var_hr, mean_rpeaks, var_rpeaks], [])))
+        X_train_new.append(np.concatenate(([mean_hr, var_hr, mean_rpeaks], var_rpeaks, mean_rr_I, var_rr_I, cA, cD)))
 
     if ~np.equal(X_test, 0):
         print("========= Feature extraction: X_test =========")
@@ -96,11 +96,11 @@ def preprocessing(X_train, X_test):
             X_test_filtered.append(np.pad(filtered_signal, (0, 18154 - len(filtered_signal)), mode='constant'))
             X_test_new.append(np.concatenate(([mean_hr, var_hr, mean_rpeaks], var_rpeaks, mean_rr_I, var_rr_I, cA, cD)))
 
-    #fis = np.copy(X_train_filtered)
-    #fis = scaler.fit_transform(fis)
-    #fis = component_analysis.fit_transform(fis)
+    fis = np.copy(X_train_filtered)
+    fis = scaler.fit_transform(fis)
+    fis = component_analysis.fit_transform(fis)
 
-    #X_train_new = np.append(X_train_new, fis, axis=1)
+    X_train_new = np.append(X_train_new, fis, axis=1)
 
     if ~np.equal(X_test, 0):
         fis = np.copy(X_test_filtered)
@@ -117,20 +117,20 @@ def preprocessing(X_train, X_test):
 def MLPNN_model():
     size = 512
     model = Sequential()
-    model.add(Dense(size, input_dim=4, activation='relu'))
+    model.add(Dense(size, input_dim=NUMBER_OF_FEATURES, activation='relu'))
     model.add(Dense(size, activation='relu'))
     model.add(Dropout(0.5))
     model.add(Dense(size, activation='relu'))
     model.add(Dropout(0.5))
-    model.add(Dense(3, activation='softmax'))
+    model.add(Dense(4, activation='softmax'))
     model.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
     return model
 
 
 def evaluate():
     X_train, X_test, y_train, _ = read_data()
-    X_train = X_train[0:10, :]
-    y_train = y_train[0:10]
+    #X_train = X_train[0:10, :]
+    #y_train = y_train[0:10]
     X_train_new, _ = preprocessing(X_train, 0)
 
     clf = SVC(
@@ -148,7 +148,7 @@ def evaluate():
     clf = KerasClassifier(build_fn=MLPNN_model, epochs=40, batch_size=256, verbose=1)
 
     clf = GradientBoostingClassifier(
-        n_estimators=1000,
+        n_estimators=10000,
         max_features='auto'
     )  # 0.66
 
