@@ -1,8 +1,7 @@
 import numpy as np
 import collections as col
 from pandas import DataFrame, read_csv, read_hdf
-from sklearn.metrics import mean_squared_error
-
+from sklearn.metrics import mean_squared_error, make_scorer, f1_score
 
 
 def read_hdf_to_matrix(filename, index_name):
@@ -27,6 +26,14 @@ def split_into_x_y(data_set):
 
 def root_mean_squared_error(y, y_pred):
     return mean_squared_error(y, y_pred)**5
+
+
+def scorer():
+    return make_scorer(f1_score_micro, greater_is_better=True)
+
+
+def f1_score_micro(y_true, y_pred, **kwargs):
+    return f1_score(y_true=y_true, y_pred=y_pred, average='micro', **kwargs)
 
 
 def count_class_occurences(y):
