@@ -4,12 +4,15 @@
 
 import numpy as np
 import collections as col
+
+from pandas import read_csv
+
 from helper_functions import read_hdf
 
 
 def main_1():
     # Get, split and transform train dataset
-    y_train = read_hdf("task3/input/y_train.h5").values
+    y_train = read_csv("task4/input/train_target.csv", index_col="id").values
 
     ctr = col.Counter(y_train[:, 0])
     occurrences = list(ctr.values())
@@ -32,4 +35,3 @@ def main_2():
 
 
 main_1()
-main_2()
