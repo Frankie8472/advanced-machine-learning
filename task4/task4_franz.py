@@ -26,9 +26,9 @@ from skvideo.io import vread
 """
 
 def read_data():
-    X_train, _ = hf.read_hdf_to_matrix("X_train.h5", "id")
-    y_train, _ = hf.read_hdf_to_matrix("y_train.h5", "id")
-    X_test, test_index = hf.read_hdf_to_matrix("X_test.h5", "id")
+    X_train = hf.import_data(158, "input/train/", "avi", True)
+    X_test = hf.import_data(69, "input/test/", "avi", True)
+    y_train, test_index = hf.read_csv_to_matrix("input/train_target.csv", "id")
     return X_train, X_test, np.squeeze(y_train), test_index
 
 
@@ -45,7 +45,7 @@ def preprocessing(X_train, X_test):
     for row in range(0, np.size(X_train, axis=0)):
         x_ = np.copy(X_train[row, :])
         x_ = x_[~np.isnan(x_)]
-        ecg_analysis = ecg.ecg(signal=x_, sampling_rate=SAMPLING_RATE, show=False)
+        ecg_analysis = ecg.ecg(signal=x_, sampling_rate=5, show=False)
 
         if np.size(ecg_analysis['heart_rate']) == 0:
             mean_hr = 0
@@ -191,8 +191,7 @@ def predict():
 
 
 def test():
-    arr = vread("input/train/0.avi")
-    print(arr[1, :, :, :])
+    X_train, X_test, y_train, test_index = read_data()
 
 
 test()

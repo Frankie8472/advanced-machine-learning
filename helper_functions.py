@@ -2,6 +2,7 @@ import numpy as np
 import collections as col
 from pandas import DataFrame, read_csv, read_hdf
 from sklearn.metrics import mean_squared_error, make_scorer, f1_score
+from skvideo.io import vread
 
 
 def read_hdf_to_matrix(filename, index_name):
@@ -42,3 +43,22 @@ def count_class_occurences(y):
     print(ctr)
     print("=======================================================================")
     return
+
+
+def import_data(number_of_videos, folder, format, starts_with_zero):
+    q = 0
+    if not starts_with_zero: q = 1
+    X = np.asarray([])
+    max_eval = 209
+    max = 0
+    for n in range(0+q, number_of_videos+q):
+        sample = vread(folder+str(n)+"."+format)
+        number_of_frames = np.ma.size(sample, axis=0)
+        frames_to_add = max_eval - number_of_frames
+        slice_to_add = np.zeros(shape=(frames_to_add, 100, 100, 3))
+        if number_of_frames > max:
+            max = np.ma.size(sample, axis=0)
+        sample = np.concatenate((sample, slice_to_add), axis=0)
+        X = np.append(X, sample)
+
+    return X
