@@ -13,12 +13,17 @@ from keras.layers import Dense, Dropout, MaxPooling3D, Conv3D, Activation
 from keras.wrappers.scikit_learn import KerasClassifier
 from keras.optimizers import RMSprop
 import pywt as pt
+from skvideo.io import vread
+
 
 """
 - 2 classes: 0.0, 1.0
 - Occurences: 0: 79, 1: 79
-"""
 
+1. cropp to view (ev. with u-net)
+2. cnn multi input (array of 3, color depth)
+3. 2 output, classification -> keras
+"""
 
 def read_data():
     X_train, _ = hf.read_hdf_to_matrix("X_train.h5", "id")
@@ -107,8 +112,7 @@ def preprocessing(X_train, X_test):
 def MLPNN_model():
     global NUMBER_OF_FEATURES
     model = Sequential()
-    model.add(Dense(NUMBER_OF_FEATURES, input_dim=NUMBER_OF_FEATURES))
-    model.add(Conv3D(32, (1, 60, 1), strides=(1, 1, 1), padding='valid', data_format=None, dilation_rate=(1, 1, 1)))
+    model.add(Conv3D(input_shape=(209, 100, 100, 3), filters=32, pool_size=(1, 60, 1), strides=(1, 1, 1), padding='valid', data_format=None, dilation_rate=(1, 1, 1)))
     model.add(Activation('relu'))
     model.add(MaxPooling3D(pool_size=(1, 30, 1), strides=2, padding='valid', data_format=None))
     model.add(Conv3D(32, (1, 30, 1), strides=(1, 1, 1), padding='valid', data_format=None, dilation_rate=(1, 1, 1)))
@@ -186,4 +190,9 @@ def predict():
     return
 
 
-evaluate()
+def test():
+    arr = vread("input/train/0.avi")
+    print(arr[1, :, :, :])
+
+
+test()
