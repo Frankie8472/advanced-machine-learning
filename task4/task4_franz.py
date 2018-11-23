@@ -1,19 +1,12 @@
-from keras.activations import relu
-from sklearn.decomposition import FastICA
-from sklearn.ensemble import GradientBoostingClassifier
-
-import helper_functions as hf
 import numpy as np
+import helper_functions as hf
+from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import cross_val_score
-from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
-from biosppy import ecg
 from keras.models import Sequential
-from keras.layers import Dense, Dropout, MaxPooling3D, Conv3D, Activation
+from keras.layers import Dense, MaxPooling3D, Conv3D, Activation, Flatten, Dropout
 from keras.wrappers.scikit_learn import KerasClassifier
 from keras.optimizers import RMSprop
-import pywt as pt
-from skvideo.io import vread
 
 
 """
@@ -25,91 +18,27 @@ from skvideo.io import vread
 3. 2 output, classification -> keras
 """
 
+NUMBER_OF_FEATURES = 0
+
+
 def read_data():
     X_train = hf.import_data(158, "input/train/", "avi", True)
     X_test = hf.import_data(69, "input/test/", "avi", True)
+
+    global NUMBER_OF_FEATURES
+    NUMBER_OF_FEATURES = np.size(X_train, axis=0)
+
     y_train, test_index = hf.read_csv_to_matrix("input/train_target.csv", "id")
     return X_train, X_test, np.squeeze(y_train), test_index
 
 
 def preprocessing(X_train, X_test):
-    X_train_new = []
-    X_test_new = []
-    X_train_filtered = []
-    X_test_filtered = []
-
-    scaler = StandardScaler()
-    component_analysis = FastICA(n_components=20)
-
-    print("========= Feature extraction: X_train =========")
-    for row in range(0, np.size(X_train, axis=0)):
-        x_ = np.copy(X_train[row, :])
-        x_ = x_[~np.isnan(x_)]
-        ecg_analysis = ecg.ecg(signal=x_, sampling_rate=5, show=False)
-
-        if np.size(ecg_analysis['heart_rate']) == 0:
-            mean_hr = 0
-            var_hr = 0
-        else:
-            mean_hr = np.mean(ecg_analysis['heart_rate'])
-            var_hr = np.var(ecg_analysis['heart_rate'])
-
-        filtered_signal = ecg_analysis['filtered']
-        mean_rpeaks = np.mean(np.diff(ecg_analysis['rpeaks']))
-        var_rpeaks = np.var(np.diff(ecg_analysis['rpeaks']))
-        mean_rr_I = np.mean(ecg_analysis['templates'], 0)
-        var_rr_I = np.var(ecg_analysis['templates'], 0)
-        cA, cD = pt.dwt(mean_rr_I, 'db3')
-
-        X_train_filtered.append(np.pad(filtered_signal, (0, 18154 - len(filtered_signal)), mode='constant'))
-        X_train_new.append(np.concatenate(([mean_hr, var_hr, mean_rpeaks, var_rpeaks], mean_rr_I, var_rr_I, cA, cD)))
-
-    """
-    print("========= Feature extraction: X_test =========")
-    for row in range(0, np.size(X_test, axis=0)):
-        x_ = np.copy(X_test[row, :])
-        x_ = x_[~np.isnan(x_)]
-        ecg_analysis = ecg.ecg(signal=x_, sampling_rate=SAMPLING_RATE, show=False)
-
-        if np.size(ecg_analysis['heart_rate']) == 0:
-            mean_hr = 0
-            var_hr = 0
-        else:
-            mean_hr = np.mean(ecg_analysis['heart_rate'])
-            var_hr = np.var(ecg_analysis['heart_rate'])
-
-        filtered_signal = ecg_analysis['filtered']
-        mean_rpeaks = np.mean(np.diff(ecg_analysis['rpeaks']))
-        var_rpeaks = np.var(np.diff(ecg_analysis['rpeaks']))
-        mean_rr_I = np.mean(ecg_analysis['templates'], 0)
-        var_rr_I = np.var(ecg_analysis['templates'], 0)
-        cA, cD = pt.dwt(mean_rr_I, 'db3')
-
-        X_test_filtered.append(np.pad(filtered_signal, (0, 18154 - len(filtered_signal)), mode='constant'))
-        X_test_new.append(np.concatenate(([mean_hr, var_hr, mean_rpeaks, var_rpeaks], mean_rr_I, var_rr_I, cA, cD)))
-    """
-    fis = np.copy(X_train_filtered)
-    fis = scaler.fit_transform(fis)
-    fis = component_analysis.fit_transform(fis)
-
-    X_train_new = np.append(X_train_new, fis, axis=1)
-
-    """
-    fis = np.copy(X_test_filtered)
-    fis = scaler.transform(fis)
-    fis = component_analysis.transform(fis)
-    X_test_new = np.c_[X_test_new, fis]
-    """
-
-    global NUMBER_OF_FEATURES
-    NUMBER_OF_FEATURES = np.size(X_train_new, axis=1)
-
-    print(NUMBER_OF_FEATURES)
-    print("========= End of feature extraction =========")
+    X_train_new = X_train
+    X_test_new = X_test
     return np.asarray(X_train_new), np.asarray(X_test_new)
 
 
-def MLPNN_model():
+def cnn_model():
     global NUMBER_OF_FEATURES
     model = Sequential()
     model.add(Conv3D(input_shape=(209, 100, 100, 3), filters=32, pool_size=(1, 60, 1), strides=(1, 1, 1), padding='valid', data_format=None, dilation_rate=(1, 1, 1)))
@@ -123,14 +52,18 @@ def MLPNN_model():
     model.add(MaxPooling3D(pool_size=(1, 8, 1), strides=2, padding='valid', data_format=None))
     model.add(Conv3D(32, (1, 8, 1), strides=(1, 1, 1), padding='valid', data_format=None, dilation_rate=(1, 1, 1)))
     model.add(Activation('relu'))
-    model.add(Dense(2048, activation='relu'))
+    model.add(Flatten())
+    model.add(Dense(1024, activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(512, activation='relu'))
+    model.add(Dropout(0.5))
     model.add(Dense(4, activation='softmax'))
     model.compile(loss='categorical_crossentropy', optimizer=RMSprop(), metrics=['accuracy'])
     return model
 
 
 def evaluate():
-    X_train, X_test, y_train, _ = read_data()
+    X_train, X_test, y_train, test_index = read_data()
     X_train = X_train[0:100, :]
     y_train = y_train[0:100]
     X_train_new, _ = preprocessing(X_train, 0)
@@ -147,7 +80,7 @@ def evaluate():
         decision_function_shape='ovr'
     )
 
-    clf = KerasClassifier(build_fn=MLPNN_model, epochs=40, batch_size=256, verbose=0)
+    clf = KerasClassifier(build_fn=cnn_model, epochs=40, batch_size=256, verbose=0)
 
     clf = GradientBoostingClassifier(
         n_estimators=1000,
@@ -177,7 +110,7 @@ def predict():
         decision_function_shape='ovr'
     )
 
-    clf = KerasClassifier(build_fn=MLPNN_model, epochs=40, batch_size=256, verbose=1)
+    clf = KerasClassifier(build_fn=cnn_model, epochs=40, batch_size=256, verbose=1)
 
     clf = GradientBoostingClassifier(
         n_estimators=1000,
@@ -191,7 +124,7 @@ def predict():
 
 
 def test():
-    X_train, X_test, y_train, test_index = read_data()
+    return
 
 
 test()
