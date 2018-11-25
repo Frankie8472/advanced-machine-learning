@@ -49,40 +49,23 @@ def preprocessing(X_train, X_test):
 
 def cnn_model():
     model = Sequential()
-    model.add(Conv2D(filters=64, kernel_size=(100, 100), input_shape=(100, 100, 1)))
+    model.add(Conv2D(filters=4, kernel_size=(3, 3), input_shape=(100, 100, 1)))
     model.add(Activation('relu'))
-
-    model.add(Conv2D(filters=64, kernel_size=(100, 100)))
-    model.add(Activation('relu'))
-    """
     model.add(Dropout(0.5))
     
-    model.add(MaxPooling2D((50, 50)))
-    model.add(Conv2D(filters=128, kernel_size=(50, 50)))
-    model.add(Activation('relu'))
-    model.add(Conv2D(filters=128, kernel_size=(50, 50)))
-    model.add(Activation('relu'))
+    model.add(MaxPooling2D((64, 64)))
+    model.add(Conv2D(filters=8, kernel_size=(3, 3)))
     model.add(Dropout(0.5))
 
-    model.add(MaxPooling2D((25, 25)))
-    model.add(Conv2D(filters=256, kernel_size=(25, 25)))
-    model.add(Activation('relu'))
-    model.add(Conv2D(filters=256, kernel_size=(25, 25)))
-    model.add(Activation('relu'))
-    model.add(Conv2D(filters=256, kernel_size=(25, 25)))
-    model.add(Activation('relu'))
+    model.add(MaxPooling2D((32, 32)))
+    model.add(Conv2D(filters=16, kernel_size=(3, 3)))
     model.add(Dropout(0.5))
 
-    model.add(MaxPooling2D((12, 12)))
-    model.add(Conv2D(filters=512, kernel_size=(12, 12)))
-    model.add(Activation('relu'))
-    model.add(Conv2D(filters=512, kernel_size=(12, 12)))
-    model.add(Activation('relu'))
-    model.add(Conv2D(filters=512, kernel_size=(12, 12)))
-    model.add(Activation('relu'))
+    model.add(MaxPooling2D((16, 16)))
+    model.add(Conv2D(filters=32, kernel_size=(3, 3)))
     model.add(Dropout(0.5))
 
-    model.add(MaxPooling2D((6, 6)))
+    model.add(MaxPooling2D((8, 8)))
 
     model.add(Flatten())
     model.add(Dense(1024, activation='relu'))
@@ -91,10 +74,7 @@ def cnn_model():
     model.add(Dropout(0.5))
     model.add(Dense(512, activation='relu'))
     model.add(Dropout(0.5))
-    """
-    model.add(Flatten())
-
-    model.add(Dense(1280, activation='softmax'))
+    model.add(Dense(128, activation='softmax'))
     model.add(Dropout(0.5))
     model.add(Dense(1, activation='sigmoid'))
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
