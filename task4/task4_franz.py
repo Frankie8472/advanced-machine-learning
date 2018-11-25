@@ -1,15 +1,15 @@
 import numpy as np
-from skvideo.io import vread
-
+from sklearn.metrics import roc_auc_score
+from sklearn.neural_network import MLPRegressor
+from skvideo.measure import viideo_features
 import helper_functions as hf
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import cross_val_score
 from sklearn.svm import SVC
 from keras.models import Sequential
-from keras.layers import Dense, MaxPooling3D, Conv3D, Activation, Flatten, Dropout
-from keras.wrappers.scikit_learn import KerasClassifier
+from keras.layers import Dense, MaxPooling3D, Conv3D, Activation, Flatten, Dropout, Conv2D, Conv1D, MaxPooling2D
+from keras.wrappers.scikit_learn import KerasClassifier, KerasRegressor
 from keras.optimizers import RMSprop
-
 
 """
 - 2 classes: 0.0, 1.0
@@ -24,111 +24,110 @@ NUMBER_OF_FEATURES = 0
 
 
 def read_data():
-    X_train = hf.import_data(158, "input/train/", "avi", True)
-    X_test = hf.import_data(69, "input/test/", "avi", True)
-
+    X_train = hf.import_video_data(158, "input/train/")
+    #X_test = hf.import_video_data(69, "input/test/")
+    X_test = 0
     global NUMBER_OF_FEATURES
     NUMBER_OF_FEATURES = np.size(X_train, axis=0)
 
-    y_train, test_index = hf.read_csv_to_matrix("input/train_target.csv", "id")
+    y_train, test_index = hf.read_csv_to_matrix("train_target.csv", "id")
     return X_train, X_test, np.squeeze(y_train), test_index
 
 
 def preprocessing(X_train, X_test):
-    X_train_new = X_train
+    conv = np.zeros((100, 100, 1))
+    X_train_new = []
+    for n in range(0, np.size(X_train, axis=0)):
+        frames = np.size(X_train[n], axis=0)
+        for p in range(0, frames):
+            conv += X_train[n][p]
+        X_train_new.append(conv/frames)
+
     X_test_new = X_test
     return np.asarray(X_train_new), np.asarray(X_test_new)
 
 
 def cnn_model():
-    global NUMBER_OF_FEATURES
     model = Sequential()
-    model.add(Conv3D(input_shape=(209, 100, 100, 3), filters=32, pool_size=(1, 60, 1), strides=(1, 1, 1), padding='valid', data_format=None, dilation_rate=(1, 1, 1)))
+    model.add(Conv2D(filters=64, kernel_size=(100, 100), input_shape=(100, 100, 1)))
     model.add(Activation('relu'))
-    model.add(MaxPooling3D(pool_size=(1, 30, 1), strides=2, padding='valid', data_format=None))
-    model.add(Conv3D(32, (1, 30, 1), strides=(1, 1, 1), padding='valid', data_format=None, dilation_rate=(1, 1, 1)))
-    model.add(Activation('sigmoid'))
-    model.add(MaxPooling3D(pool_size=(1, 15, 1), strides=2, padding='valid', data_format=None))
-    model.add(Conv3D(32, (1, 15, 1), strides=(1, 1, 1), padding='valid', data_format=None, dilation_rate=(1, 1, 1)))
-    model.add(Activation('sigmoid'))
-    model.add(MaxPooling3D(pool_size=(1, 8, 1), strides=2, padding='valid', data_format=None))
-    model.add(Conv3D(32, (1, 8, 1), strides=(1, 1, 1), padding='valid', data_format=None, dilation_rate=(1, 1, 1)))
+
+    model.add(Conv2D(filters=64, kernel_size=(100, 100)))
     model.add(Activation('relu'))
+    """
+    model.add(Dropout(0.5))
+    
+    model.add(MaxPooling2D((50, 50)))
+    model.add(Conv2D(filters=128, kernel_size=(50, 50)))
+    model.add(Activation('relu'))
+    model.add(Conv2D(filters=128, kernel_size=(50, 50)))
+    model.add(Activation('relu'))
+    model.add(Dropout(0.5))
+
+    model.add(MaxPooling2D((25, 25)))
+    model.add(Conv2D(filters=256, kernel_size=(25, 25)))
+    model.add(Activation('relu'))
+    model.add(Conv2D(filters=256, kernel_size=(25, 25)))
+    model.add(Activation('relu'))
+    model.add(Conv2D(filters=256, kernel_size=(25, 25)))
+    model.add(Activation('relu'))
+    model.add(Dropout(0.5))
+
+    model.add(MaxPooling2D((12, 12)))
+    model.add(Conv2D(filters=512, kernel_size=(12, 12)))
+    model.add(Activation('relu'))
+    model.add(Conv2D(filters=512, kernel_size=(12, 12)))
+    model.add(Activation('relu'))
+    model.add(Conv2D(filters=512, kernel_size=(12, 12)))
+    model.add(Activation('relu'))
+    model.add(Dropout(0.5))
+
+    model.add(MaxPooling2D((6, 6)))
+
     model.add(Flatten())
     model.add(Dense(1024, activation='relu'))
     model.add(Dropout(0.5))
+    model.add(Dense(256, activation='relu'))
+    model.add(Dropout(0.5))
     model.add(Dense(512, activation='relu'))
     model.add(Dropout(0.5))
-    model.add(Dense(4, activation='softmax'))
-    model.compile(loss='categorical_crossentropy', optimizer=RMSprop(), metrics=['accuracy'])
+    """
+    model.add(Flatten())
+
+    model.add(Dense(1280, activation='softmax'))
+    model.add(Dropout(0.5))
+    model.add(Dense(1, activation='sigmoid'))
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     return model
 
 
 def evaluate():
+    print("========= Reading data =========")
     X_train, X_test, y_train, test_index = read_data()
-    X_train = X_train[0:100, :]
-    y_train = y_train[0:100]
-    X_train_new, _ = preprocessing(X_train, 0)
 
-    svc = SVC(
-        C=1.0,
-        kernel='rbf',
-        gamma='scale',
-        shrinking=True,
-        probability=True,
-        class_weight='balanced',
-        verbose=False,
-        max_iter=-1,
-        decision_function_shape='ovr'
-    )
+    X_train_new, _ = preprocessing(X_train, X_test)
 
-    clf = KerasClassifier(build_fn=cnn_model, epochs=40, batch_size=256, verbose=0)
+    print("========= Evaluation =========")
 
-    clf = GradientBoostingClassifier(
-        n_estimators=1000,
-        max_features='auto'
-    )  # 0.66
-
-    print(np.shape(X_train_new))
-    print("========= CrossValidation =========")
-    results = cross_val_score(clf, X_train_new, y_train, cv=5, n_jobs=1, scoring=hf.scorer())
-    print("Results: %.4f (%.4f) MSE" % (results.mean(), results.std()))
+    model = cnn_model()
+    model.fit(X_train_new, y_train, batch_size=10, epochs=10, verbose=0)
+    y_pred = model.predict_proba(X_train_new, verbose=0)
+    print(y_pred)
+    print('ROC_AUC: ',  roc_auc_score(y_train, y_pred))
+    # results = cross_val_score(clf, X_train_new, y_train, cv=5, n_jobs=5, scoring=hf.scorer())
+    # print("Results: %.4f (%.4f) MSE" % (results.mean(), results.std()))
     return
 
 
 def predict():
     X_train, X_test, y_train, test_index = read_data()
-    X_train_new, X_test_new = preprocessing(X_train, X_test)
-
-    clf = SVC(
-        C=1.0,
-        kernel='rbf',
-        gamma='scale',
-        shrinking=True,
-        probability=True,
-        class_weight='balanced',
-        verbose=False,
-        max_iter=-1,
-        decision_function_shape='ovr'
-    )
 
     clf = KerasClassifier(build_fn=cnn_model, epochs=40, batch_size=256, verbose=1)
 
-    clf = GradientBoostingClassifier(
-        n_estimators=1000,
-        max_features='auto'
-    )  # 0.66
-
-    clf.fit(X_train_new, y_train)
-    y_pred = clf.predict(X_test_new)
+    clf.fit(X_train, y_train)
+    y_pred = clf.predict(X_test)
     hf.write_to_csv_from_vector("solution.csv", test_index, y_pred, "id")
     return
 
 
-def test():
-    v = vread("input/train/0.avi", outputdict={"-pix_fmt": "gray"})[:, :, :, 0]
-    print(v)
-    return
-
-
-test()
+evaluate()

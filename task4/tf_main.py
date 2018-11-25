@@ -6,12 +6,17 @@ from task4.tf_utils import input_fn_from_dataset, input_fn_frame_from_dataset, s
 from task4.get_data import get_videos_from_folder, get_target_from_csv
 from task4.utils import save_solution
 
-dir_path = os.path.dirname(os.path.realpath(__file__))
-train_folder = os.path.join(dir_path, "../train/")
-test_folder = os.path.join(dir_path, "../test/")
+config = tf.ConfigProto(
+        device_count={'GPU': 0}
+    )
+sess = tf.Session(config=config)
 
-train_target = os.path.join(dir_path, '../train_target.csv')
-my_solution_file = os.path.join(dir_path, '../solution.csv')
+dir_path = "input/"
+train_folder = os.path.join(dir_path, "train/")
+test_folder = os.path.join(dir_path, "test/")
+
+train_target = os.path.join(dir_path, 'train_target.csv')
+my_solution_file = os.path.join("output/", 'solution.csv')
 
 tf_record_dir = os.path.join(dir_path, '..', 'tf_records')
 os.makedirs(tf_record_dir, exist_ok=True)
@@ -33,8 +38,8 @@ feature_col_frame = tf.feature_column.numeric_column('frame', shape=[100, 100], 
 batchsize_video = 1
 
 estimator = tf.estimator.LinearClassifier(feature_columns=[feature_col_video], model_dir='tf_checkpoints')
+estimator = tf.estimator.LinearRegressor(feature_columns=[feature_col_video], model_dir='tf_checkpoints')
 estimator.train(input_fn=lambda: input_fn_from_dataset(tf_record_train, batch_size=batchsize_video), max_steps=1)
-pred = estimator.predict(
-    input_fn=lambda: input_fn_from_dataset(tf_record_test, batch_size=batchsize_video, num_epochs=1, shuffle=False))
+pred = estimator.predict(input_fn=lambda: input_fn_from_dataset(tf_record_test, batch_size=batchsize_video, num_epochs=1, shuffle=False))
 dummy_solution = prob_positive_class_from_prediction(pred)
 save_solution(my_solution_file, dummy_solution)

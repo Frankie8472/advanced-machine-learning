@@ -17,6 +17,31 @@ def read_csv_to_matrix(filename, index_name):
     return data.values, data.index
 
 
+def import_video_data(number_of_videos, folder):
+    X = []
+    max_eval = 209
+    max = 0
+    for n in range(0, number_of_videos):
+        video = vread(folder + str(n) + ".avi", outputdict={"-pix_fmt": "gray"})  # [:, :, :, 0]
+        X.append(video)
+
+    return np.asarray(X)
+
+
+def import_video_data_zeroed(number_of_videos, folder):
+    X = []
+    max_eval = 209
+    max = 0
+    for n in range(0, number_of_videos):
+        video = vread(folder + str(n) + ".avi", outputdict={"-pix_fmt": "gray"})  # [:, :, :, 0]
+        size = np.size(video, axis=0)
+        video = np.append(video, np.zeros([max_eval - size, 100, 100, 1]), axis=0)
+        X.append(video)
+        print(np.shape(X))
+
+    return np.asarray(X)
+
+
 def write_to_csv_from_vector(filename, index_col, vec, index_name):
     return DataFrame(np.c_[index_col, vec]).to_csv("output/" + filename, index=False, header=[index_name, "y"])
 
@@ -28,7 +53,7 @@ def split_into_x_y(data_set):
 
 
 def root_mean_squared_error(y, y_pred):
-    return mean_squared_error(y, y_pred)**5
+    return mean_squared_error(y, y_pred) ** 5
 
 
 def scorer():
@@ -45,5 +70,3 @@ def count_class_occurences(y):
     print(ctr)
     print("=======================================================================")
     return
-
-
