@@ -49,23 +49,26 @@ def preprocessing(X_train, X_test):
 
 def cnn_model():
     model = Sequential()
-    model.add(Conv2D(filters=4, kernel_size=(3, 3), input_shape=(100, 100, 1)))
+    model.add(Conv3D(filters=16, kernel_size=(3, 3, 3), input_shape=(22, 100, 100, 1)))
     model.add(Activation('relu'))
     model.add(Dropout(0.5))
-    
-    model.add(MaxPooling2D((64, 64)))
-    model.add(Conv2D(filters=8, kernel_size=(3, 3)))
+
+    model.add(MaxPooling3D((1, 2, 2)))
+    model.add(Conv3D(filters=32, kernel_size=(3, 3, 3)))
+    model.add(Activation('relu'))
     model.add(Dropout(0.5))
 
-    model.add(MaxPooling2D((32, 32)))
-    model.add(Conv2D(filters=16, kernel_size=(3, 3)))
+    model.add(MaxPooling3D((1, 2, 2)))
+    model.add(Conv3D(filters=64, kernel_size=(3, 3, 3)))
+    model.add(Activation('relu'))
     model.add(Dropout(0.5))
 
-    model.add(MaxPooling2D((16, 16)))
-    model.add(Conv2D(filters=32, kernel_size=(3, 3)))
+    model.add(MaxPooling3D((1, 2, 2)))
+    model.add(Conv3D(filters=128, kernel_size=(3, 3, 3)))
+    model.add(Activation('relu'))
     model.add(Dropout(0.5))
 
-    model.add(MaxPooling2D((8, 8)))
+    model.add(MaxPooling3D((1, 2, 2)))
 
     model.add(Flatten())
     model.add(Dense(1024, activation='relu'))
@@ -85,8 +88,8 @@ def evaluate():
     print("========= Reading data =========")
     X_train, X_test, y_train, test_index = read_data()
 
-    X_train_new, _ = preprocessing(X_train, X_test)
-
+    #X_train_new, _ = preprocessing(X_train, X_test)
+    X_train_new = X_train
     print("========= Evaluation =========")
 
     model = cnn_model()

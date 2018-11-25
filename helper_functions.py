@@ -22,7 +22,7 @@ def import_video_data(number_of_videos, folder):
     max_eval = 209
     max = 0
     for n in range(0, number_of_videos):
-        video = vread(folder + str(n) + ".avi", outputdict={"-pix_fmt": "gray"})  # [:, :, :, 0]
+        video = vread(folder + str(n) + ".avi", outputdict={"-pix_fmt": "gray"})[0:22, :, :, :]
         X.append(video)
 
     return np.asarray(X)
