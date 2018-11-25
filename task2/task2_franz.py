@@ -146,6 +146,6 @@ def main():
     hf.count_class_occurences(y_pred)
     print("Counter({1.0: 3075, 0.0: 512.5, 2.0: 512.5})  Should be!")
 
-    hf.write_to_csv_from_vector("output_franz.csv", test_index, y_pred, "id")
+    hf.write_to_csv_from_vector("solution.csv", test_index, y_pred, "id")
 
 main()

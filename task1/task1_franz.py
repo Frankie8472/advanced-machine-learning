@@ -115,6 +115,6 @@ def main():
     X_train, X_test = remove_unimportant_features(X_train, X_test, y_train)
     print(X_train.shape)
     y_pred = predict(X_train, y_train, X_test)
-    hf.write_to_csv_from_vector("output_franz.csv", test_index, y_pred, "id")
+    hf.write_to_csv_from_vector("solution.csv", test_index, y_pred, "id")
 
 main()

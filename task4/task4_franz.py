@@ -1,4 +1,6 @@
 import numpy as np
+from skvideo.io import vread
+
 import helper_functions as hf
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import cross_val_score
@@ -119,11 +121,13 @@ def predict():
 
     clf.fit(X_train_new, y_train)
     y_pred = clf.predict(X_test_new)
-    hf.write_to_csv_from_vector("output_franz.csv", test_index, y_pred, "id")
+    hf.write_to_csv_from_vector("solution.csv", test_index, y_pred, "id")
     return
 
 
 def test():
+    v = vread("input/train/0.avi", outputdict={"-pix_fmt": "gray"})[:, :, :, 0]
+    print(v)
     return
 
 

@@ -1,7 +1,9 @@
+import os
+
 import numpy as np
 import collections as col
 from pandas import DataFrame, read_csv, read_hdf
-from sklearn.metrics import mean_squared_error, make_scorer, f1_score
+from sklearn.metrics import mean_squared_error, make_scorer, f1_score, roc_auc_score
 from skvideo.io import vread
 
 
@@ -30,7 +32,7 @@ def root_mean_squared_error(y, y_pred):
 
 
 def scorer():
-    return make_scorer(f1_score_micro, greater_is_better=True)
+    return make_scorer(roc_auc_score, greater_is_better=True)
 
 
 def f1_score_micro(y_true, y_pred, **kwargs):
@@ -45,20 +47,3 @@ def count_class_occurences(y):
     return
 
 
-def import_data(number_of_videos, folder, format, starts_with_zero):
-    q = 0
-    if not starts_with_zero: q = 1
-    X = np.asarray([])
-    max_eval = 209
-    max = 0
-    for n in range(0+q, number_of_videos+q):
-        sample = vread(folder+str(n)+"."+format)
-        number_of_frames = np.ma.size(sample, axis=0)
-        frames_to_add = max_eval - number_of_frames
-        slice_to_add = np.zeros(shape=(frames_to_add, 100, 100, 3))
-        if number_of_frames > max:
-            max = np.ma.size(sample, axis=0)
-        sample = np.concatenate((sample, slice_to_add), axis=0)
-        X = np.append(X, sample)
-
-    return X

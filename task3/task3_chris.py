@@ -148,7 +148,7 @@ def predict():
     pipe = make_pipeline()
     pipe.fit(X_train, y_train)
     y_pred = pipe.predict(X_test)
-    hf.write_to_csv_from_vector("output_franz.csv", test_index, y_pred, "id")
+    hf.write_to_csv_from_vector("solution.csv", test_index, y_pred, "id")
     return
 
 
@@ -417,7 +417,7 @@ def test():
     clf.fit(x, y)
 
     y_pred = clf.predict(xt)
-    hf.write_to_csv_from_vector("output_franz.csv", test_index, y_pred, "id")
+    hf.write_to_csv_from_vector("solution.csv", test_index, y_pred, "id")
 
     return
 
@@ -523,7 +523,7 @@ def risky():
     xt = pca.transform(X_test)
     xt = ss.transform(xt)
     y_pred = clf.predict(xt)
-    hf.write_to_csv_from_vector("output_franz.csv", test_index, y_pred, "id")
+    hf.write_to_csv_from_vector("solution.csv", test_index, y_pred, "id")
 
 
 def analysis():
@@ -760,7 +760,7 @@ def main():
     print("\n Final fitting")
     clf.fit(new_x, y_train)
     y_pred = clf.predict(new_t)
-    hf.write_to_csv_from_vector("output_franz.csv", test_index, y_pred, "id")
+    hf.write_to_csv_from_vector("solution.csv", test_index, y_pred, "id")
 
 
 main()
