@@ -86,7 +86,7 @@ def cnn_model():
     model.add(Dense(128, activation='softmax'))
     model.add(Dropout(0.5))
     model.add(Dense(1, activation='sigmoid'))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy', auroc])
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     return model
 
 
