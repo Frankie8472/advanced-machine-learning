@@ -1,8 +1,10 @@
 import numpy as np
+import helper_functions as hf
+import tensorflow as tf
+from keras import backend as K
 from sklearn.metrics import roc_auc_score
 from sklearn.neural_network import MLPRegressor
 from skvideo.measure import viideo_features
-import helper_functions as hf
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import cross_val_score
 from sklearn.svm import SVC
@@ -47,6 +49,10 @@ def preprocessing(X_train, X_test):
     return np.asarray(X_train_new), np.asarray(X_test_new)
 
 
+def auroc(y_true, y_pred):
+    return tf.py_func(roc_auc_score, (y_true, y_pred), tf.double)
+
+
 def cnn_model():
     model = Sequential()
     model.add(Conv3D(filters=16, kernel_size=(3, 3, 3), input_shape=(22, 100, 100, 1)))
@@ -80,7 +86,7 @@ def cnn_model():
     model.add(Dense(128, activation='softmax'))
     model.add(Dropout(0.5))
     model.add(Dense(1, activation='sigmoid'))
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy', auroc])
     return model
 
 
@@ -94,11 +100,9 @@ def evaluate():
 
     model = cnn_model()
     model.fit(X_train_new, y_train, batch_size=10, epochs=10, verbose=0)
-    y_pred = model.predict_proba(X_train_new, verbose=0)
+    y_pred = model.predict(X_train_new, verbose=0)
     print(y_pred)
     print('ROC_AUC: ',  roc_auc_score(y_train, y_pred))
-    # results = cross_val_score(clf, X_train_new, y_train, cv=5, n_jobs=5, scoring=hf.scorer())
-    # print("Results: %.4f (%.4f) MSE" % (results.mean(), results.std()))
     return
 
 
