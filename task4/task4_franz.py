@@ -108,7 +108,7 @@ def evaluate():
     print("========= Evaluation =================")
 
     model = cnn_model()
-    model.fit(X_train_new, y_train_new, batch_size=1, epochs=1, verbose=1)
+    model.fit(X_train_new, y_train_new, batch_size=1, epochs=2, verbose=1)
     y_pred = model.predict(X_train_new, verbose=1)
     y_pred_new = np.asarray([])
     for n in range(1, np.size(train_frame_index)):
@@ -123,7 +123,7 @@ def evaluate():
         y_temp = y_pred[test_frame_index[n - 1]:test_frame_index[n]]
         y_pred_new = np.r_[y_pred_new, np.mean(y_temp)]
 
-    hf.write_to_csv_from_vector("solution_franz.csv", test_index, y_pred_new, "id")
+    hf.write_to_csv_from_vector("solution_franz_1.csv", test_index, y_pred_new, "id")
     return
 
 
