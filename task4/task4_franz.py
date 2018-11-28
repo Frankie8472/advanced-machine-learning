@@ -9,7 +9,8 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import cross_val_score
 from sklearn.svm import SVC
 from keras.models import Sequential
-from keras.layers import Dense, MaxPooling3D, Conv3D, Activation, Flatten, Dropout, Conv2D, Conv1D, MaxPooling2D
+from keras.layers import Reshape, average, Average, Concatenate, Dense, MaxPooling3D, Conv3D, Activation, Flatten, \
+    Dropout, Conv2D, Conv1D, MaxPooling2D, TimeDistributed, LSTM
 from keras.wrappers.scikit_learn import KerasClassifier, KerasRegressor
 from keras.optimizers import RMSprop
 
@@ -96,9 +97,76 @@ def cnn_model():
     return model
 
 
+def cnn_model2():
+    model = Sequential()
+    model.add(Conv2D(filters=2, kernel_size=(3, 3), input_shape=(100, 100, 1)))
+    model.add(Activation('relu'))
+
+    model.add(MaxPooling2D((2, 2)))
+    model.add(Conv2D(filters=4, kernel_size=(3, 3)))
+    model.add(Activation('relu'))
+
+    model.add(MaxPooling2D((2, 2)))
+    model.add(Conv2D(filters=8, kernel_size=(3, 3)))
+    model.add(Activation('relu'))
+
+    model.add(MaxPooling2D((2, 2)))
+    model.add(Conv2D(filters=16, kernel_size=(3, 3)))
+    model.add(Activation('relu'))
+
+    model.add(MaxPooling2D((2, 2)))
+
+    model.add(Flatten())
+
+    model.add(Dense(64, activation='relu'))
+    model.add(Dense(1, activation='sigmoid'))
+    model.add(Average())
+    print(model.output)
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    return model
+
+
+def crnn_model():
+    model = Sequential()
+    model.add(TimeDistributed(Conv2D(filters=2, kernel_size=(3, 3), input_shape=(100, 100, 1))))
+    model.add(TimeDistributed(Activation('relu')))
+
+    model.add(TimeDistributed(MaxPooling2D((2, 2))))
+    model.add(TimeDistributed(Conv2D(filters=4, kernel_size=(3, 3))))
+    model.add(TimeDistributed(Activation('relu')))
+
+    model.add(TimeDistributed(MaxPooling2D((2, 2))))
+    model.add(TimeDistributed(Conv2D(filters=8, kernel_size=(3, 3))))
+    model.add(TimeDistributed(Activation('relu')))
+
+    model.add(TimeDistributed(MaxPooling2D((2, 2))))
+    model.add(TimeDistributed(Conv2D(filters=16, kernel_size=(3, 3))))
+    model.add(TimeDistributed(Activation('relu')))
+
+    model.add(TimeDistributed(MaxPooling2D((2, 2))))
+
+    model.add(TimeDistributed(Flatten()))
+
+    model.LSTM()
+
+    model.add(Dense(64, activation='relu'))
+    model.add(Dense(1, activation='sigmoid'))
+    model.add(Average())
+    print(model.output)
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    return model
+
+
 def evaluate():
+    model = cnn_model2()
     print("========= Reading data ===============")
     X_train, X_test, y_train, test_index = read_data()
+
+    num_epoch = 2
+    for i in range(num_epoch):
+        for idx in range(X_train.shape[0]):
+            model.train_on_batch(X_train[idx], y_train[idx])
+        print("Finished Epoch {}".format(i))
 
     print("========= Preprocessing data =========")
     X_train_new, X_test_new, y_train_new, train_frame_index, test_frame_index = preprocessing(X_train, X_test, y_train)
@@ -107,13 +175,13 @@ def evaluate():
 
     print("========= Evaluation =================")
 
-    model = cnn_model()
-    model.fit(X_train_new, y_train_new, batch_size=1, epochs=2, verbose=1)
+    #model.fit(X_train_new, y_train_new, batch_size=1, epochs=2, verbose=1)
     y_pred = model.predict(X_train_new, verbose=1)
     y_pred_new = np.asarray([])
     for n in range(1, np.size(train_frame_index)):
         y_temp = y_pred[train_frame_index[n-1]:train_frame_index[n]]
         y_pred_new = np.r_[y_pred_new, np.mean(y_temp)]
+    print(y_pred)
     print(y_pred_new)
     print('ROC_AUC: ',  roc_auc_score(y_train, y_pred_new))
 
@@ -139,3 +207,34 @@ def predict():
 
 
 evaluate()
+
+
+
+
+
+
+"""
+
+start = frame_index[]
+end = frame_index[]
+
+model.train_on_batch(frames[)
+
+
+
+"""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

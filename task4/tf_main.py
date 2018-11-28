@@ -37,8 +37,9 @@ feature_col_video = tf.feature_column.numeric_column('video', shape=[212, 100, 1
 feature_col_frame = tf.feature_column.numeric_column('frame', shape=[100, 100], dtype=tf.uint8)
 batchsize_video = 1
 
-estimator = tf.estimator.LinearClassifier(feature_columns=[feature_col_video], model_dir='tf_checkpoints')
-estimator = tf.estimator.LinearRegressor(feature_columns=[feature_col_video], model_dir='tf_checkpoints')
+estimator = tf.estimator.LinearClassifier(
+    feature_columns=[feature_col_video],
+    model_dir='tf_checkpoints')
 estimator.train(input_fn=lambda: input_fn_from_dataset(tf_record_train, batch_size=batchsize_video), max_steps=1)
 pred = estimator.predict(input_fn=lambda: input_fn_from_dataset(tf_record_test, batch_size=batchsize_video, num_epochs=1, shuffle=False))
 dummy_solution = prob_positive_class_from_prediction(pred)
