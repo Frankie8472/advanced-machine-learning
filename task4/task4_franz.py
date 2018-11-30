@@ -1,29 +1,17 @@
 import numpy as np
 import helper_functions as hf
-import tensorflow as tf
-from keras import backend as K
 from sklearn.metrics import roc_auc_score
-from sklearn.neural_network import MLPRegressor
-from skvideo.measure import viideo_features
-from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.model_selection import cross_val_score
-from sklearn.svm import SVC
+from sklearn.model_selection import StratifiedKFold
 from keras.models import Sequential
-from keras.layers import Reshape, average, Average, Concatenate, Dense, MaxPooling3D, Conv3D, Activation, Flatten, \
-    Dropout, Conv2D, Conv1D, MaxPooling2D, TimeDistributed, LSTM
-from keras.wrappers.scikit_learn import KerasClassifier, KerasRegressor
-from keras.optimizers import RMSprop
+from keras.layers import Dense, Activation, Flatten, \
+    Dropout, Conv2D, MaxPooling2D, TimeDistributed, LSTM, LeakyReLU
+from keras.utils import to_categorical
 
 """
 - 2 classes: 0.0, 1.0
 - Occurences: 0: 79, 1: 79
 
-1. cropp to view (ev. with u-net)
-2. cnn multi input (array of 3, color depth)
-3. 2 output, classification -> keras
 """
-
-NUMBER_OF_FEATURES = 0
 
 
 def read_data():
@@ -31,9 +19,6 @@ def read_data():
     X_test = hf.import_video_data(69, "input/test/")
 
     test_index = np.arange(69)
-
-    global NUMBER_OF_FEATURES
-    NUMBER_OF_FEATURES = np.size(X_train, axis=0)
 
     y_train, _ = hf.read_csv_to_matrix("train_target.csv", "id")
     return X_train, X_test, np.squeeze(y_train), test_index
@@ -47,7 +32,7 @@ def preprocessing(X_train, X_test, y_train):
     test_frame_index = [0]
     for n in range(0, np.size(X_train, axis=0)):
         frames = np.size(X_train[n], axis=0)
-        train_frame_index.append(frames+train_frame_index[n])
+        train_frame_index.append(frames + train_frame_index[n])
         X_train_new = np.append(X_train_new, X_train[n], axis=0)
         if y_train[n]:
             y_train_new = np.r_[y_train_new, np.ones(frames)]
@@ -56,13 +41,9 @@ def preprocessing(X_train, X_test, y_train):
 
     for n in range(0, np.size(X_test, axis=0)):
         frames = np.size(X_test[n], axis=0)
-        test_frame_index.append(frames+test_frame_index[n])
+        test_frame_index.append(frames + test_frame_index[n])
         X_test_new = np.append(X_test_new, X_test[n], axis=0)
     return np.asarray(X_train_new), np.asarray(X_test_new), np.asarray(y_train_new), train_frame_index, test_frame_index
-
-
-def auroc(y_true, y_pred):
-    return tf.py_func(roc_auc_score, (y_true, y_pred), tf.double)
 
 
 def cnn_model():
@@ -120,7 +101,6 @@ def cnn_model2():
 
     model.add(Dense(64, activation='relu'))
     model.add(Dense(1, activation='sigmoid'))
-    model.add(Average())
     print(model.output)
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     return model
@@ -128,113 +108,120 @@ def cnn_model2():
 
 def crnn_model():
     model = Sequential()
-    model.add(TimeDistributed(Conv2D(filters=2, kernel_size=(3, 3), input_shape=(100, 100, 1))))
-    model.add(TimeDistributed(Activation('relu')))
+    # (100, 100, 1)
+    model.add(TimeDistributed(Conv2D(filters=4, kernel_size=(3, 3)), input_shape=(None, 100, 100, 1)))
+    model.add(LeakyReLU(alpha=.1))
 
     model.add(TimeDistributed(MaxPooling2D((2, 2))))
-    model.add(TimeDistributed(Conv2D(filters=4, kernel_size=(3, 3))))
-    model.add(TimeDistributed(Activation('relu')))
-
-    model.add(TimeDistributed(MaxPooling2D((2, 2))))
+    # (50, 50, 2)
     model.add(TimeDistributed(Conv2D(filters=8, kernel_size=(3, 3))))
-    model.add(TimeDistributed(Activation('relu')))
+    model.add(LeakyReLU(alpha=.1))
 
     model.add(TimeDistributed(MaxPooling2D((2, 2))))
+    # (25, 25, 4)
     model.add(TimeDistributed(Conv2D(filters=16, kernel_size=(3, 3))))
-    model.add(TimeDistributed(Activation('relu')))
+    model.add(LeakyReLU(alpha=.1))
+
+    model.add(TimeDistributed(MaxPooling2D((2, 2))))
+    # (12, 12, 8)
+    model.add(TimeDistributed(Conv2D(filters=32, kernel_size=(3, 3))))
+    model.add(LeakyReLU(alpha=.1))
 
     model.add(TimeDistributed(MaxPooling2D((2, 2))))
 
     model.add(TimeDistributed(Flatten()))
 
-    model.LSTM()
+    model.add(LSTM(units=512, activation='tanh', recurrent_activation='hard_sigmoid', return_sequences=True))
 
-    model.add(Dense(64, activation='relu'))
-    model.add(Dense(1, activation='sigmoid'))
-    model.add(Average())
-    print(model.output)
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.add(Dense(units=1024))
+    model.add(LeakyReLU(alpha=.1))
+    model.add(Dropout(0.5))
+
+    model.add(Dense(units=128))
+    model.add(LeakyReLU(alpha=.1))
+    model.add(Dropout(0.5))
+
+    model.add(Dense(units=256))
+    model.add(LeakyReLU(alpha=.1))
+    model.add(Dropout(0.5))
+
+    model.add(Dense(2, activation='softmax'))
+
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     return model
 
 
 def evaluate():
-    model = cnn_model2()
     print("========= Reading data ===============")
-    X_train, X_test, y_train, test_index = read_data()
+    X, _, y, _ = read_data()
 
-    num_epoch = 2
-    for i in range(num_epoch):
-        for idx in range(X_train.shape[0]):
-            model.train_on_batch(X_train[idx], y_train[idx])
-        print("Finished Epoch {}".format(i))
+    print("========= One-hot encoding y ===============")
+    y = to_categorical(y=y)
 
-    print("========= Preprocessing data =========")
-    X_train_new, X_test_new, y_train_new, train_frame_index, test_frame_index = preprocessing(X_train, X_test, y_train)
-    print(np.shape(X_train_new))
-    print(np.shape(y_train_new))
+    print("========= Split into train and test set =================")
+    skf = StratifiedKFold(n_splits=5)
+    scores = []
 
-    print("========= Evaluation =================")
+    for train_index, test_index in skf.split(X, y):
+        X_train, X_test = X[train_index], X[test_index]
+        y_train, y_test = y[train_index], y[test_index]
 
-    #model.fit(X_train_new, y_train_new, batch_size=1, epochs=2, verbose=1)
-    y_pred = model.predict(X_train_new, verbose=1)
-    y_pred_new = np.asarray([])
-    for n in range(1, np.size(train_frame_index)):
-        y_temp = y_pred[train_frame_index[n-1]:train_frame_index[n]]
-        y_pred_new = np.r_[y_pred_new, np.mean(y_temp)]
-    print(y_pred)
-    print(y_pred_new)
-    print('ROC_AUC: ',  roc_auc_score(y_train, y_pred_new))
+        print("========= Initializing CRNN model ===============")
+        model = crnn_model()
 
-    y_pred = model.predict(X_test_new, verbose=1)
-    y_pred_new = np.asarray([])
-    for n in range(1, np.size(test_frame_index)):
-        y_temp = y_pred[test_frame_index[n - 1]:test_frame_index[n]]
-        y_pred_new = np.r_[y_pred_new, np.mean(y_temp)]
+        print("========= Evaluation")
+        num_epoch = 2
+        for i in range(1, num_epoch + 1):
+            for idx in range(X_train.shape[0]):
+                model.train_on_batch(np.reshape(X_train[idx], (1, np.size(X_train[idx], axis=0), 100, 100, 1)),
+                                     np.asarray([y_train[idx]]))
+                print(str(i) + "/" + str(num_epoch) + ": " + str(idx) + " of " + str(X_train.shape[0]))
+            print("Finished Epoch {}".format(i))
 
-    hf.write_to_csv_from_vector("solution_franz_1.csv", test_index, y_pred_new, "id")
+        print("========= Predicting")
+        y_pred = []
+        for idx in range(X_test.shape[0]):
+            y_pred_batch = model.predict_on_batch(
+                np.reshape(X_test[idx], (1, np.size(X_test[idx], axis=0), 100, 100, 1)))
+            y_pred.append(y_pred_batch)
+        y_pred = np.squeeze(np.argmax(y_pred, axis=1))
+
+        print("========= Calculating and saving score")
+        scores.append(roc_auc_score(np.argmax(y_test, axis=1), y_pred))
+
+    print("Accuracy of ROC_AUC_SCORE: %0.4f (+/- %0.4f)" % (scores.mean(), scores.std() * 2))
+
     return
 
 
 def predict():
+    print("========= Initializing CRNN model")
+    model = crnn_model()
+
+    print("========= Reading data")
     X_train, X_test, y_train, test_index = read_data()
 
-    clf = KerasClassifier(build_fn=cnn_model, epochs=40, batch_size=256, verbose=1)
+    print("========= One-hot encoding y")
+    y_train = to_categorical(y=y_train)
 
-    clf.fit(X_train, y_train)
-    y_pred = clf.predict(X_test)
-    hf.write_to_csv_from_vector("solution.csv", test_index, y_pred, "id")
+    print("========= Evaluation")
+    num_epoch = 1
+    for i in range(1, num_epoch + 1):
+        for idx in range(X_train.shape[0]):
+            model.train_on_batch(np.reshape(X_train[idx], (1, np.size(X_train[idx], axis=0), 100, 100, 1)),
+                                 np.asarray([y_train[idx]]))
+            print(str(i) + "/" + str(num_epoch) + ": " + str(idx) + " of " + str(X_train.shape[0]))
+        print("Finished Epoch {}".format(i))
+
+    print("========= Predicting")
+    y_pred = []
+    for idx in range(X_test.shape[0]):
+        y_pred_batch = model.predict_proba(np.reshape(X_test[idx], (1, np.size(X_test[idx], axis=0), 100, 100, 1)))
+        y_pred.append(y_pred_batch[0][1])
+
+    print("========= Printing solution")
+    hf.write_to_csv_from_vector("solution_franz_1.csv", test_index, np.asarray(y_pred), "id")
     return
 
 
 evaluate()
-
-
-
-
-
-
-"""
-
-start = frame_index[]
-end = frame_index[]
-
-model.train_on_batch(frames[)
-
-
-
-"""
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
