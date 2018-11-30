@@ -131,7 +131,7 @@ def crnn_model():
 
     model.add(TimeDistributed(Flatten()))
 
-    model.add(LSTM(units=512, activation='tanh', recurrent_activation='hard_sigmoid', return_sequences=True))
+    model.add(LSTM(units=512, activation='tanh', recurrent_activation='hard_sigmoid'))
 
     model.add(Dense(units=1024))
     model.add(LeakyReLU(alpha=.1))
@@ -155,9 +155,6 @@ def evaluate():
     print("========= Reading data ===============")
     X, _, y, _ = read_data()
 
-    print("========= One-hot encoding y ===============")
-    y = to_categorical(y=y)
-
     print("========= Split into train and test set =================")
     skf = StratifiedKFold(n_splits=5)
     scores = []
@@ -165,6 +162,9 @@ def evaluate():
     for train_index, test_index in skf.split(X, y):
         X_train, X_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
+        print("========= One-hot encoding y ===============")
+        y_train = to_categorical(y=y_train)
+        y_test = to_categorical(y=y_test)
 
         print("========= Initializing CRNN model ===============")
         model = crnn_model()
