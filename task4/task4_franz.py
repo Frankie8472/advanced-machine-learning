@@ -1,9 +1,12 @@
 import numpy as np
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.svm import SVC
+from skvideo.measure import niqe, viideo_score, viideo_features, videobliinds_features, brisque_features
 from skvideo.motion import globalEdgeMotion, blockMotion
 
 import helper_functions as hf
 from sklearn.metrics import roc_auc_score
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, cross_val_score
 from keras.models import Sequential
 from keras.layers import Dense, Activation, Flatten, \
     Dropout, Conv2D, MaxPooling2D, TimeDistributed, LSTM, LeakyReLU, Average, Lambda, K
@@ -67,10 +70,10 @@ def cnn_model():
 
     model.add(TimeDistributed(Flatten()))
 
-    model.add(TimeDistributed(Dense(units=1028)))
+    model.add(TimeDistributed(Dense(units=1024)))
     model.add(LeakyReLU(alpha=.1))
 
-    model.add(TimeDistributed(Dense(units=512)))
+    model.add(TimeDistributed(Dense(units=16)))
     model.add(LeakyReLU(alpha=.1))
 
     model.add(TimeDistributed(Dense(2, activation='sigmoid')))
@@ -101,34 +104,36 @@ def rnn_model():
 def crnn_model():
     model = Sequential()
 
-    model.add(TimeDistributed(Conv2D(filters=32, kernel_size=(3, 3)), input_shape=(None, 100, 100, 1)))
+    model.add(TimeDistributed(Conv2D(filters=4, kernel_size=(3, 3)), input_shape=(None, 100, 100, 1)))
     model.add(LeakyReLU(alpha=.1))
 
     model.add(TimeDistributed(MaxPooling2D((2, 2))))
 
-    model.add(TimeDistributed(Conv2D(filters=64, kernel_size=(3, 3))))
+    model.add(TimeDistributed(Conv2D(filters=8, kernel_size=(3, 3))))
     model.add(LeakyReLU(alpha=.1))
 
     model.add(TimeDistributed(MaxPooling2D((2, 2))))
 
-    model.add(TimeDistributed(Conv2D(filters=128, kernel_size=(3, 3))))
+    model.add(TimeDistributed(Conv2D(filters=16, kernel_size=(3, 3))))
     model.add(LeakyReLU(alpha=.1))
 
     model.add(TimeDistributed(MaxPooling2D((2, 2))))
 
     model.add(TimeDistributed(Flatten()))
 
-    model.add(TimeDistributed(Dense(units=1028)))
+    model.add(TimeDistributed(Dense(units=1024)))
     model.add(LeakyReLU(alpha=.1))
 
     model.add(TimeDistributed(Dense(units=512)))
     model.add(LeakyReLU(alpha=.1))
 
-    model.add(TimeDistributed(Dense(units=10)))
+    model.add(TimeDistributed(Dense(units=16)))
     model.add(LeakyReLU(alpha=.1))
 
-    model.add(LSTM(units=10, return_sequences=False))
+    model.add(LSTM(units=16, return_sequences=False))
 
+    model.add(Dense(256, activation='relu'))
+    model.add(LeakyReLU(alpha=.1))
     model.add(Dense(2, activation='softmax'))
 
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
@@ -152,7 +157,7 @@ def evaluate():
         y_test = to_categorical(y=y_test)
 
         print("==> Initializing CRNN model")
-        model = cnn_model()
+        model = crnn_model()
 
         print("==> Evaluation")
         global num_epoch
@@ -215,9 +220,62 @@ def predict():
 def test():
     print("==> Reading data")
     X_train, X_test, y_train, test_index = read_data()
-    for idx in range(X_train.shape[0]):
-        feat = blockMotion(X_train[idx], method='ARPS', mbSize=100, p=2)
 
+    X = []
+    print("==> Feature extraction")
+    for idx in range(X_train.shape[0]):
+        feat = blockMotion(X_train[idx], method='DS', mbSize=5, p=2)
+        mean_x = []
+        mean_y = []
+        std_x = []
+        std_y = []
+        print(str(idx) + "/" + str(X_train.shape[0]-1))
+        for jdx in range(feat.shape[0]):
+            step_mean_x = feat[jdx, :, :, 0].mean()
+            step_mean_y = feat[jdx, :, :, 1].mean()
+            step_std_x = feat[jdx, :, :, 0].std()
+            step_std_y = feat[jdx, :, :, 1].std()
+            mean_x.append(step_mean_x)
+            mean_y.append(step_mean_y)
+            std_x.append(step_std_x)
+            std_y.append(step_std_y)
+        mean_x = np.asarray(mean_x)
+        mean_y = np.asarray(mean_y)
+        std_x = np.asarray(std_x)
+        std_y = np.asarray(std_y)
+        X.append([
+            mean_x.mean(),
+            mean_y.mean(),
+            mean_x.std(),
+            mean_y.std(),
+            std_x.mean(),
+            std_y.mean(),
+            std_x.std(),
+            std_y.std()
+        ])
+    X = np.asarray(X)
+
+    clf = SVC(
+        C=10.0,
+        kernel='rbf',
+        gamma='scale',
+        shrinking=True,
+        probability=True,
+        class_weight='balanced',
+        verbose=False,
+        max_iter=-1,
+        decision_function_shape='ovr'
+    )
+
+    clf = GradientBoostingClassifier(
+        n_estimators=10000,
+        max_features='auto'
+    )
+
+    print(np.shape(X))
+    print("==> CrossValidation")
+    results = cross_val_score(clf, X, y_train, cv=5, n_jobs=5, scoring=hf.scorer())
+    print("Results: %.4f (%.4f) MSE" % (results.mean(), results.std()))
     return
 
 
