@@ -13,7 +13,7 @@ def read_hdf_to_matrix(filename, index_name):
 
 
 def read_csv_to_matrix(filename, index_name):
-    data = read_csv("input/" + filename, index_col=index_name)
+    data = read_csv(filename, index_col=index_name)
     return data.values, data.index
 
 
@@ -28,22 +28,20 @@ def import_video_data(number_of_videos, folder):
     return np.asarray(X)
 
 
-def import_video_data_zeroed(number_of_videos, folder):
+def import_video_data_padded(number_of_videos, folder):
     X = []
     max_eval = 209
     max = 0
     for n in range(0, number_of_videos):
         video = vread(folder + str(n) + ".avi", outputdict={"-pix_fmt": "gray"})  # [:, :, :, 0]
-        size = np.size(video, axis=0)
-        video = np.append(video, np.zeros([max_eval - size, 100, 100, 1]), axis=0)
+        video.resize(209, 100, 100, 1)
         X.append(video)
-        print(np.shape(X))
 
     return np.asarray(X)
 
 
 def write_to_csv_from_vector(filename, index_col, vec, index_name):
-    return DataFrame(np.c_[index_col, vec]).to_csv("output/" + filename, index=False, header=[index_name, "y"])
+    return DataFrame(np.c_[index_col, vec]).to_csv(filename, index=False, header=[index_name, "y"])
 
 
 def split_into_x_y(data_set):
