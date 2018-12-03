@@ -4,5 +4,9 @@ task1/input/y_train.csv
 task1/input/X_train.csv
 task1/input/X_test.csv
 task1/input/sample.csv
+task5/input/*
 images
 __pycache__/helper_functions.cpython-36.pyc
+*/__pycache__/*
+__pycache__/*
+
