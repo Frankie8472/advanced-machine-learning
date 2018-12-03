@@ -1,14 +1,12 @@
-import os
-
 import numpy as np
 import collections as col
 from pandas import DataFrame, read_csv, read_hdf
-from sklearn.metrics import mean_squared_error, make_scorer, f1_score, roc_auc_score
+from sklearn.metrics import mean_squared_error, make_scorer, f1_score, balanced_accuracy_score
 from skvideo.io import vread
 
 
-def read_hdf_to_matrix(filename, index_name):
-    data = read_hdf("input/" + filename)
+def read_hdf_to_matrix(filename):
+    data = read_hdf(filename)
     return data.values, data.index
 
 
@@ -55,7 +53,7 @@ def root_mean_squared_error(y, y_pred):
 
 
 def scorer():
-    return make_scorer(roc_auc_score, greater_is_better=True)
+    return make_scorer(balanced_accuracy_score, greater_is_better=True)
 
 
 def f1_score_micro(y_true, y_pred, **kwargs):
