@@ -1,20 +1,7 @@
-import numpy as np
-from keras import Input
-from keras.wrappers.scikit_learn import KerasClassifier
-from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
-from sklearn.svm import SVC
-from skvideo.measure import niqe, viideo_score, viideo_features, videobliinds_features, brisque_features
-from skvideo.motion import globalEdgeMotion, blockMotion
 
+import numpy as np
 import helper_functions as hf
-from sklearn.metrics import roc_auc_score
-from sklearn.model_selection import StratifiedKFold, cross_val_score
-from keras.models import Sequential
-from keras.layers import Dense, Activation, Flatten, \
-    Dropout, Conv2D, MaxPooling2D, TimeDistributed, LSTM, LeakyReLU, Average, Lambda, K, Conv3D, MaxPooling3D, \
-    GlobalMaxPooling3D, BatchNormalization, GlobalAveragePooling3D
-from keras.utils import to_categorical
-from imgaug import augmenters as iaa
+from neurokit import emg_process
 
 """
 In this task we will perform sequence classification. We will categorize temporally coherent and uniformly distributed 
@@ -39,6 +26,12 @@ Class ocurrences: {1: 34114, 2: 27133, 3: 3553}
 # TODO: Feature extraction
 # TODO: Class balance (with 'balance' in clf or with imbalanced-learn library
 # TODO: Understanding of task :P
+
+
+# 1. filter eeg between 1 and 45 hz
+# 2. five signal space projection (SSP) vectors were applied
+# X.loc[i] = np.array([np.mean(x[i]), np.std(x[i]), scipy.stats.kurtosis(x[i]), scipy.stats.skew(x[i])])
+
 
 
 def read_data():
