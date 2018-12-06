@@ -1,7 +1,8 @@
-
 import numpy as np
 import helper_functions as hf
-from neurokit import emg_process
+from scipy.stats import kurtosis, skew
+from biosppy.signals.emg import emg
+
 
 """
 In this task we will perform sequence classification. We will categorize temporally coherent and uniformly distributed 
@@ -30,8 +31,6 @@ Class ocurrences: {1: 34114, 2: 27133, 3: 3553}
 
 # 1. filter eeg between 1 and 45 hz
 # 2. five signal space projection (SSP) vectors were applied
-# X.loc[i] = np.array([np.mean(x[i]), np.std(x[i]), scipy.stats.kurtosis(x[i]), scipy.stats.skew(x[i])])
-
 
 
 def read_data():
@@ -42,14 +41,27 @@ def read_data():
     X_test_eeg2, _ = hf.read_csv_to_matrix("input/train_eeg2.csv", "Id")
     X_test_emg, _ = hf.read_csv_to_matrix("input/train_emg.csv", "Id")
     y_train, _ = hf.read_csv_to_matrix("input/train_labels.csv", "Id")
-    _, test_index = hf.read_csv_to_matrix("task5/input/sample.csv", "Id")
+    _, test_index = hf.read_csv_to_matrix("input/sample.csv", "Id")
 
     return X_train_eeg1, X_train_eeg2, X_train_emg, X_test_eeg1, X_test_eeg2, X_test_emg, np.squeeze(y_train), test_index
+
+
+def eeg_feature_extraction(x):
+    x_new = []
+    for i in range(x.shape[0]):
+        x_new.append([np.mean(x[i]), np.std(x[i]), kurtosis(x[i]), skew(x[i])])
+    return np.asarray(x_new)
+
+
+def emg_feature_extraction(x):
+    return emg(x)
 
 
 def evaluate():
     print("==> Reading data")
     X_train_eeg1, X_train_eeg2, X_train_emg, X_test_eeg1, X_test_eeg2, X_test_emg, y_train, test_index = read_data()
+
+    X_train_emg_new = emg(signal=X_train_emg, sampling_rate=128, show=False)
 
 
 evaluate()
