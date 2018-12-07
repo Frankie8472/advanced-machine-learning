@@ -2,6 +2,7 @@ import numpy as np
 import helper_functions as hf
 from scipy.stats import kurtosis, skew
 from biosppy.signals.emg import emg
+from biosppy.signals.eeg import eeg
 
 
 """
@@ -37,9 +38,9 @@ def read_data():
     X_train_eeg1, _ = hf.read_csv_to_matrix("input/train_eeg1.csv", "Id")
     X_train_eeg2, _ = hf.read_csv_to_matrix("input/train_eeg2.csv", "Id")
     X_train_emg, _ = hf.read_csv_to_matrix("input/train_emg.csv", "Id")
-    X_test_eeg1, _ = hf.read_csv_to_matrix("input/train_eeg1.csv", "Id")
-    X_test_eeg2, _ = hf.read_csv_to_matrix("input/train_eeg2.csv", "Id")
-    X_test_emg, _ = hf.read_csv_to_matrix("input/train_emg.csv", "Id")
+    X_test_eeg1, _ = hf.read_csv_to_matrix("input/test_eeg1.csv", "Id")
+    X_test_eeg2, _ = hf.read_csv_to_matrix("input/test_eeg2.csv", "Id")
+    X_test_emg, _ = hf.read_csv_to_matrix("input/test_emg.csv", "Id")
     y_train, _ = hf.read_csv_to_matrix("input/train_labels.csv", "Id")
     _, test_index = hf.read_csv_to_matrix("input/sample.csv", "Id")
 
@@ -47,6 +48,8 @@ def read_data():
 
 
 def eeg_feature_extraction(x):
+    return eeg(x)
+
     x_new = []
     for i in range(x.shape[0]):
         x_new.append([np.mean(x[i]), np.std(x[i]), kurtosis(x[i]), skew(x[i])])
@@ -60,8 +63,12 @@ def emg_feature_extraction(x):
 def evaluate():
     print("==> Reading data")
     X_train_eeg1, X_train_eeg2, X_train_emg, X_test_eeg1, X_test_eeg2, X_test_emg, y_train, test_index = read_data()
-
-    X_train_emg_new = emg(signal=X_train_emg, sampling_rate=128, show=False)
+    print("==> Feature extraction")
+    print("==> eeg")
+    # X_test_eeg1_new = eeg(signal=X_train_eeg1, sampling_rate=128, show=False)
+    print("==> emg")
+    X_train_emg_new = emg(signal=X_train_emg[0], sampling_rate=128, show=True)
+    return
 
 
 evaluate()
