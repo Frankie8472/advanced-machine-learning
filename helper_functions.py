@@ -38,6 +38,14 @@ def import_video_data_padded(number_of_videos, folder):
     return np.asarray(X)
 
 
+def mav(x):
+    return np.mean(np.abs(x))
+
+
+def rms(x):
+    return np.square(np.mean(np.square(x)))
+
+
 def write_to_csv_from_vector(filename, index_col, vec, index_name):
     return DataFrame(np.c_[index_col, vec]).to_csv(filename, index=False, header=[index_name, "y"])
 

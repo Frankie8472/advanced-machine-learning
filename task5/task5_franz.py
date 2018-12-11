@@ -1,8 +1,12 @@
 import numpy as np
+from sklearn.decomposition import PCA
+
 import helper_functions as hf
 from scipy.stats import kurtosis, skew
-from biosppy.signals.emg import emg
+from pywt import dwt
 from biosppy.signals.eeg import eeg
+from sklearn_pandas import cross_val_score
+from sklearn.svm import SVC
 
 
 """
@@ -33,6 +37,15 @@ Class ocurrences: {1: 34114, 2: 27133, 3: 3553}
 # 1. filter eeg between 1 and 45 hz
 # 2. five signal space projection (SSP) vectors were applied
 
+#Attribute Information:
+
+#1. variance of Wavelet Transformed image (continuous)
+
+#2. skewness of Wavelet Transformed image (continuous)
+
+#3. curtosis of Wavelet Transformed image (continuous)
+
+#4. entropy of image (continuous)
 
 def read_data():
     X_train_eeg1, _ = hf.read_csv_to_matrix("input/train_eeg1.csv", "Id")
@@ -47,27 +60,82 @@ def read_data():
     return X_train_eeg1, X_train_eeg2, X_train_emg, X_test_eeg1, X_test_eeg2, X_test_emg, np.squeeze(y_train), test_index
 
 
-def eeg_feature_extraction(x):
-    return eeg(x)
+def feature_extraction(w):
+    return np.mean(w), np.std(w), kurtosis(w), skew(w), hf.mav(w), hf.rms(w)
 
+
+def eeg_feature_extraction(x):
     x_new = []
-    for i in range(x.shape[0]):
-        x_new.append([np.mean(x[i]), np.std(x[i]), kurtosis(x[i]), skew(x[i])])
+
+    for idx in range(x.shape[0]):
+        analysis = eeg(signal=x[idx].reshape(-1, x.shape[1]).transpose(), sampling_rate=128, show=False)
+        v1 = analysis['filtered'].transpose()
+        v2 = analysis['theta'].transpose()
+        v3 = analysis['alpha_low'].transpose()
+        v4 = analysis['alpha_high'].transpose()
+        v5 = analysis['beta'].transpose()
+        v6 = analysis['gamma'].transpose()
+        x_new.append(np.r_[v1, v2, v3, v4, v5, v6, feature_extraction(v1), feature_extraction(v2), feature_extraction(v3), feature_extraction(v4), feature_extraction(v5), feature_extraction(v6)])
     return np.asarray(x_new)
 
 
 def emg_feature_extraction(x):
-    return emg(x)
+    x_new = []
+    for idx in range(x.shape[0]):
+        cA, cD = dwt(data=x[idx], wavelet='db2')
+        to_append = np.r_[cA, cD, feature_extraction(cA), feature_extraction(cD)]
+        x_new.append(to_append)
+
+    return np.asarray(x_new)
 
 
 def evaluate():
     print("==> Reading data")
     X_train_eeg1, X_train_eeg2, X_train_emg, X_test_eeg1, X_test_eeg2, X_test_emg, y_train, test_index = read_data()
-    print("==> Feature extraction")
-    print("==> eeg")
-    # X_test_eeg1_new = eeg(signal=X_train_eeg1, sampling_rate=128, show=False)
-    print("==> emg")
-    X_train_emg_new = emg(signal=X_train_emg[0], sampling_rate=128, show=True)
+    print("==> Train feature extraction")
+    print("==> EEG1")
+    X_train_eeg1_new = eeg_feature_extraction(X_train_eeg1)
+    print("==> EEG2")
+    X_train_eeg2_new = eeg_feature_extraction(X_train_eeg2)
+    print("==> EMG")
+    X_train_emg_new = emg_feature_extraction(X_train_emg)
+
+    # Fuse extracted features
+    X_train = np.c_[X_train_eeg1_new, X_train_eeg2_new, X_train_emg_new]
+
+    print("==> PCA")
+    pca = PCA(
+        n_components=10,
+        whiten=True
+    )
+
+    X_train = pca.fit_transform(X_train)
+
+    print("==> Initialize classifier")
+    clf = SVC(
+        C=1.0,
+        kernel='rbf',
+        shrinking=True,
+        probability=False,
+        class_weight='balanced'
+    )
+
+    print("==> 3 fold crossvalidation")
+    scores = cross_val_score(
+        estimator=clf,
+        X=X_train,
+        y=y_train,
+        groups=None,
+        scoring=hf.scorer(),
+        cv=3,
+        n_jobs=None,
+        verbose=0,
+        fit_params=None,
+        pre_dispatch='2*n_jobs',
+    )
+
+    print("Accuracy: %0.4f (+/- %0.4f)" % (scores.mean(), scores.std() * 2))
+
     return
 
 
