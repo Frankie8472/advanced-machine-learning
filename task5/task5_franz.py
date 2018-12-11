@@ -128,7 +128,7 @@ def evaluate():
         groups=None,
         scoring=hf.scorer(),
         cv=3,
-        n_jobs=None,
+        n_jobs=3,
         verbose=0,
         fit_params=None,
         pre_dispatch='2*n_jobs',
