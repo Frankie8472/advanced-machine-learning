@@ -1,11 +1,10 @@
 import numpy as np
-from sklearn.decomposition import PCA
-
 import helper_functions as hf
-from scipy.stats import kurtosis, skew
 from pywt import dwt
 from biosppy.signals.eeg import eeg
-from sklearn_pandas import cross_val_score
+from scipy.stats import kurtosis, skew
+from sklearn.decomposition import PCA
+from sklearn.model_selection import cross_val_score
 from sklearn.svm import SVC
 
 
@@ -60,8 +59,35 @@ def read_data():
     return X_train_eeg1, X_train_eeg2, X_train_emg, X_test_eeg1, X_test_eeg2, X_test_emg, np.squeeze(y_train), test_index
 
 
-def feature_extraction(w):
-    return np.mean(w), np.std(w), kurtosis(w), skew(w), hf.mav(w), hf.rms(w)
+def feature_extraction(signal):
+    # ensure numpy
+    signal = np.array(signal)
+
+    # mean
+    mean = np.mean(signal)
+
+    # median
+    median = np.median(signal)
+
+    # maximum amplitude
+    maxAmp = np.abs(signal - mean).max()
+
+    # variance
+    sigma2 = signal.var(ddof=1)
+
+    # standard deviation
+    sigma = signal.std(ddof=1)
+
+    # absolute deviation
+    ad = np.sum(np.abs(signal - median))
+
+    # kurtosis
+    kurt = kurtosis(signal, bias=False)
+
+    # skweness
+    skewness = skew(signal, bias=False)
+
+    return np.r_[mean, median, maxAmp, sigma2, sigma, ad, kurt, skewness]
 
 
 def eeg_feature_extraction(x):
@@ -69,12 +95,12 @@ def eeg_feature_extraction(x):
 
     for idx in range(x.shape[0]):
         analysis = eeg(signal=x[idx].reshape(-1, x.shape[1]).transpose(), sampling_rate=128, show=False)
-        v1 = analysis['filtered'].transpose()
-        v2 = analysis['theta'].transpose()
-        v3 = analysis['alpha_low'].transpose()
-        v4 = analysis['alpha_high'].transpose()
-        v5 = analysis['beta'].transpose()
-        v6 = analysis['gamma'].transpose()
+        v1 = analysis['filtered'].transpose().reshape(-1)
+        v2 = analysis['theta'].transpose().reshape(-1)
+        v3 = analysis['alpha_low'].transpose().reshape(-1)
+        v4 = analysis['alpha_high'].transpose().reshape(-1)
+        v5 = analysis['beta'].transpose().reshape(-1)
+        v6 = analysis['gamma'].transpose().reshape(-1)
         x_new.append(np.r_[v1, v2, v3, v4, v5, v6, feature_extraction(v1), feature_extraction(v2), feature_extraction(v3), feature_extraction(v4), feature_extraction(v5), feature_extraction(v6)])
     return np.asarray(x_new)
 
