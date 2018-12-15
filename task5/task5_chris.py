@@ -13,6 +13,12 @@ from sklearn.model_selection import cross_val_score
 from sklearn.svm import SVC
 import matplotlib.pyplot as plt
 import biosppy.signals.tools as st
+
+from keras.wrappers.scikit_learn import KerasClassifier
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, LSTM#, CuDNNLSTM
+from keras.optimizers import Adam, SGD, RMSprop
+
 """
 In this task we will perform sequence classification. We will categorize temporally coherent and uniformly distributed 
 short sections of a long time-series. In particular, for each 4 seconds of a lengthy EEG/EMG measurement of brain 
@@ -96,7 +102,7 @@ def feature_extraction(signal):
 
 
 def eeg_feature_extraction(x):
-    x_new = []
+    x_new = np.zeros(shape=(x.shape[0], 155))
 
     for idx in range(x.shape[0]):
         analysis = eeg(signal=x[idx].reshape(-1, x.shape[1]).transpose(), sampling_rate=128, show=False)
@@ -106,18 +112,23 @@ def eeg_feature_extraction(x):
         v4 = analysis['alpha_high'].transpose().reshape(-1)
         v5 = analysis['beta'].transpose().reshape(-1)
         v6 = analysis['gamma'].transpose().reshape(-1)
-        x_new.append(np.r_[v2, v3, v4, v5, v6])
+        x_new[idx] = (np.r_[v2, v3, v4, v5, v6])
         if idx % 1000 == 0:
             print(str(idx) + " eeg")
-    return np.asarray(x_new)
+    return x_new
 
 
 def emg_feature_extraction(x):
     sampling_rate = 128
     filter_frequency = 35
-    x_new = []
+    x_new = np.zeros(shape=(x.shape[0], 3))
     for idx in range(x.shape[0]):
         signal = x[idx]
+
+        mean_signal = np.mean(signal)
+
+        mean_amplitude = np.mean(np.abs(signal - mean_signal))
+
         filtered, _, _ = st.filter_signal(signal=signal,
                                           ftype='butter',
                                           band='highpass',
@@ -132,7 +143,7 @@ def emg_feature_extraction(x):
         ts = np.linspace(0, T, length, endpoint=False)
 
         # plot
-        if True:
+        if False:
             plotting.plot_emg(ts=ts,
                               sampling_rate=1000.,
                               raw=signal,
@@ -144,23 +155,47 @@ def emg_feature_extraction(x):
 
         nr_of_onsets = np.size(onsets)
         mean_onsets = np.mean(np.diff(onsets))
-        var_onsets = np.var(np.diff(onsets))
+        # var_onsets = np.var(np.diff(onsets))
 
-        x_new.append(np.r_[nr_of_onsets, mean_onsets, var_onsets])
+        x_new[idx] = (np.r_[nr_of_onsets, mean_amplitude, mean_onsets])
     # for idx in range(x.shape[0]):
     #     cA, cD = dwt(data=x[idx], wavelet='db2')
     #     to_append = np.r_[cA]
     #     x_new.append(to_append)
     #     if idx % 1000 == 0:
     #         print(str(idx) + " eeg")
-    return np.asarray(x_new)
+    return x_new
 
 
 def evaluate():
+
+    print("creating rnn")
+    model = Sequential()
+    model.add(LSTM(313, input_shape=(1, 313), activation='relu', return_sequences=True))
+    model.add(Dropout(0.2))
+
+    model.add(LSTM(313, activation='relu'))
+    model.add(Dropout(0.1))
+
+    model.add(Dense(64, activation='relu'))
+    model.add(Dropout(0.2))
+
+    model.add(Dense(3, activation='softmax'))
+
+    opt = Adam(lr=0.001, decay=1e-6)
+
+    model.compile(
+        loss='sparse_categorical_crossentropy',
+        optimizer=opt,
+        metrics=['accuracy'],
+    )
+
+    rnn = KerasClassifier(build_fn=model, epochs=3, batch_size=256, verbose=1)
+
     print("==> Reading data")
     X_train_eeg1, X_train_eeg2, X_train_emg, X_test_eeg1, X_test_eeg2, X_test_emg, y_train, test_index = read_data()
 
-    print("==> rescaling data")
+    print("==> Rescaling data")
     from sklearn.preprocessing import StandardScaler
     ss = StandardScaler()
     X_train_eeg1_1 = ss.fit_transform(X_train_eeg1[0:21600])
@@ -187,40 +222,41 @@ def evaluate():
 
     print("==> Train feature extraction")
     print("==> EEG1")
-    # X_train_eeg1_new = eeg_feature_extraction(X_train_eeg1_new)
+    X_train_eeg1_new = eeg_feature_extraction(X_train_eeg1_new)
     print("==> EEG2")
-    # X_train_eeg2_new = eeg_feature_extraction(X_train_eeg2_new)
+    X_train_eeg2_new = eeg_feature_extraction(X_train_eeg2_new)
     print("==> EMG")
     X_train_emg_new = emg_feature_extraction(X_train_emg)
 
     # Fuse extracted features
     X_train = np.c_[X_train_eeg1_new, X_train_eeg2_new, X_train_emg_new]
-
+    X_train = np.nan_to_num(X_train)
     print("==> PCA")
     pca = PCA(
         n_components=10,
         whiten=True
     )
 
-    X_train = pca.fit_transform(X_train)
+    X_train___ = pca.fit_transform(X_train)
 
     print("==> Initialize classifier")
-    clf = SVC(
-        C=1.0,
-        kernel='rbf',
-        shrinking=True,
-        probability=False,
-        class_weight='balanced'
-    )
-
-    clf = GradientBoostingClassifier(
-        n_estimators=10000,
-        max_features='auto'
-    )
-
+    # clf = SVC(
+    #     C=1.0,
+    #     kernel='rbf',
+    #     shrinking=True,
+    #     probability=False,
+    #     class_weight='balanced'
+    # )
+    #
+    # clf = GradientBoostingClassifier(
+    #     n_estimators=10000,
+    #     max_features='auto'
+    # )
+    #
+    X_train = X_train.reshape((1, 313))
     print("==> 3 fold crossvalidation")
     scores = cross_val_score(
-        estimator=clf,
+        estimator=rnn,
         X=X_train,
         y=y_train,
         groups=None,
