@@ -290,7 +290,7 @@ def predict():
         y_pred.append(y_pred_batch)
 
     print("==> Printing solution")
-    hf.write_to_csv_from_vector("solution_franz_1.csv", test_index, np.asarray(y_pred), "id")
+    hf.write_to_csv_from_vector("solution_franz_3ep.csv", test_index, np.asarray(y_pred), "id")
     return
 
 
